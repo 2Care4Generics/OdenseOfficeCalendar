@@ -25,8 +25,8 @@ const ROOMS = [
 
 const OUTPUT_FILE = path.join(__dirname, '..', 'docs', 'index.html');
 
-const DAYS_BEFORE = 3;  // how many days back from today to fetch
-const DAYS_AFTER = 13;  // how many days forward from today to fetch
+const DAYS_BEFORE = 35; // how many days back from today to fetch
+const DAYS_AFTER = 45;  // how many days forward from today to fetch
 
 // =================================================
 
@@ -272,12 +272,13 @@ function renderPage(roomsData, generatedAtISO) {
   .topbar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 20px;
+    gap: 10px;
+    padding: 10px 20px;
     border-bottom: 1px solid var(--grid-line);
     flex-wrap: wrap;
+    row-gap: 8px;
   }
-  .nav-btn {
+  .nav-btn, .refresh-btn {
     border: 1px solid var(--grid-line);
     background: #fff;
     border-radius: 4px;
@@ -286,8 +287,11 @@ function renderPage(roomsData, generatedAtISO) {
     font-size: 16px;
     cursor: pointer;
     color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .nav-btn:hover { background: var(--header-bg); }
+  .nav-btn:hover, .refresh-btn:hover, .today-btn:hover, .view-btn:hover { background: var(--header-bg); }
   .nav-btn:disabled { opacity: 0.35; cursor: default; }
   .today-btn {
     border: 1px solid var(--grid-line);
@@ -299,58 +303,98 @@ function renderPage(roomsData, generatedAtISO) {
     cursor: pointer;
     color: var(--text-primary);
   }
-  .today-btn:hover { background: var(--header-bg); }
-  .refresh-btn {
+  .date-input {
     border: 1px solid var(--grid-line);
-    background: #fff;
     border-radius: 4px;
-    width: 32px;
     height: 32px;
-    font-size: 15px;
-    cursor: pointer;
+    padding: 0 8px;
+    font-size: 13px;
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: #fff;
   }
-  .refresh-btn:hover { background: var(--header-bg); }
-  .refresh-btn.spinning svg { animation: spin 0.6s linear; }
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .date-label {
     font-size: 17px;
     font-weight: 600;
     margin-left: 4px;
+    white-space: nowrap;
   }
+  .view-toggle {
+    display: flex;
+    border: 1px solid var(--grid-line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .view-btn {
+    background: #fff;
+    border: none;
+    border-right: 1px solid var(--grid-line);
+    padding: 0 12px;
+    height: 32px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+  .view-btn:last-child { border-right: none; }
+  .view-btn.active { background: var(--accent); color: #fff; }
+  .room-filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .room-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--grid-line);
+    border-radius: 999px;
+    padding: 4px 10px 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    background: #fff;
+    color: var(--text-primary);
+    user-select: none;
+  }
+  .room-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .room-chip.off { opacity: 0.4; }
+  .room-chip.off .dot { background: transparent !important; border: 1.5px solid var(--text-secondary); }
   .updated {
     margin-left: auto;
     font-size: 12px;
     color: var(--text-secondary);
+    white-space: nowrap;
   }
   .calendar-wrap { overflow-x: auto; }
+
+  /* ---- Day / Week time grid ---- */
   .calendar {
     display: grid;
-    grid-template-columns: 56px repeat(3, minmax(160px, 1fr));
     min-width: 640px;
   }
-  .room-header {
-    position: sticky;
-    top: 0;
+  .day-group-header {
+    grid-row: 1;
+    border-bottom: 1px solid var(--grid-line);
+    padding: 8px 4px 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
     background: #fff;
-    z-index: 3;
+  }
+  .day-group-header:hover { background: var(--header-bg); }
+  .day-group-header .wd { color: var(--text-secondary); font-weight: 500; display: block; font-size: 11px; }
+  .day-group-header.is-today { color: var(--accent); }
+  .room-header {
+    grid-row: 2;
+    background: #fff;
     border-bottom: 2px solid var(--grid-line);
-    padding: 10px 8px;
-    font-size: 14px;
+    padding: 6px 4px;
+    font-size: 11px;
     font-weight: 600;
     text-align: center;
   }
-  .room-header .dot {
-    display: inline-block;
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    margin-right: 6px;
-  }
-  .gutter-header { border-bottom: 2px solid var(--grid-line); }
-  .gutter { position: relative; border-right: 1px solid var(--grid-line); }
+  .room-header .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; }
+  .gutter-header { grid-row: 1 / span 2; border-bottom: 2px solid var(--grid-line); }
+  .gutter { position: relative; border-right: 1px solid var(--grid-line); grid-row: 3; }
   .gutter .hour-label {
     position: absolute;
     right: 8px;
@@ -361,8 +405,9 @@ function renderPage(roomsData, generatedAtISO) {
   .room-col {
     position: relative;
     border-right: 1px solid var(--grid-line);
+    grid-row: 3;
   }
-  .room-col:last-child { border-right: none; }
+  .day-divider { border-right: 2px solid var(--grid-line); }
   .hour-line {
     position: absolute;
     left: 0; right: 0;
@@ -388,34 +433,141 @@ function renderPage(roomsData, generatedAtISO) {
     border-radius: 5px;
     border-left: 3px solid;
     padding: 3px 6px;
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.3;
     overflow: hidden;
     color: #201f1e;
   }
   .event-title { font-weight: 600; }
-  .event-time { color: var(--text-secondary); font-size: 11px; }
-  .empty-state {
-    padding: 40px 20px;
-    text-align: center;
-    color: var(--text-secondary);
-    font-size: 13px;
-  }
+  .event-time { color: var(--text-secondary); font-size: 10px; }
   .error-note {
     padding: 8px;
     font-size: 11px;
     color: var(--now-line);
     text-align: center;
   }
+
+  /* ---- Month view ---- */
+  .month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(120px, 1fr));
+    min-width: 840px;
+  }
+  .month-weekday {
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--grid-line);
+    text-align: left;
+  }
+  .month-cell {
+    border-right: 1px solid var(--grid-line);
+    border-bottom: 1px solid var(--grid-line);
+    min-height: 110px;
+    padding: 6px;
+    cursor: pointer;
+    vertical-align: top;
+  }
+  .month-cell:hover { background: var(--header-bg); }
+  .month-cell.outside { background: #fbfbfb; color: var(--text-secondary); }
+  .month-cell .day-num {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .month-cell.is-today .day-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+  }
+  .month-chip {
+    font-size: 10.5px;
+    border-radius: 3px;
+    border-left: 3px solid;
+    padding: 1px 4px;
+    margin-bottom: 2px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .month-more { font-size: 10.5px; color: var(--text-secondary); }
+
+  /* ---- Sidebar ---- */
+  .sidebar-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.25);
+    z-index: 10;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0; right: 0;
+    bottom: 0;
+    width: min(340px, 90vw);
+    background: #fff;
+    box-shadow: -4px 0 16px rgba(0,0,0,0.15);
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--grid-line);
+  }
+  .sidebar-header h2 { font-size: 15px; margin: 0; }
+  .sidebar-close {
+    border: none;
+    background: none;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px;
+  }
+  .sidebar-body { padding: 12px 16px; overflow-y: auto; }
+  .sidebar-empty { color: var(--text-secondary); font-size: 13px; padding: 12px 0; }
+  .sidebar-item {
+    border-left: 3px solid;
+    border-radius: 4px;
+    background: var(--header-bg);
+    padding: 8px 10px;
+    margin-bottom: 8px;
+  }
+  .sidebar-item .room-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: none;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .sidebar-item .title { font-size: 13px; font-weight: 600; }
+  .sidebar-item .time { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <button class="nav-btn" id="prevBtn" aria-label="Previous day">&#8249;</button>
-  <button class="nav-btn" id="nextBtn" aria-label="Next day">&#8250;</button>
+  <button class="nav-btn" id="prevBtn" aria-label="Previous">&#8249;</button>
+  <button class="nav-btn" id="nextBtn" aria-label="Next">&#8250;</button>
   <button class="today-btn" id="todayBtn">Today</button>
+  <input type="date" class="date-input" id="dateInput">
   <span class="date-label" id="dateLabel"></span>
+
+  <div class="view-toggle" id="viewToggle">
+    <button class="view-btn" data-mode="day">Day</button>
+    <button class="view-btn" data-mode="week">Week</button>
+    <button class="view-btn" data-mode="month">Month</button>
+  </div>
+
+  <div class="room-filters" id="roomFilters"></div>
+
   <span class="updated" id="updatedLabel"></span>
   <button class="refresh-btn" id="refreshBtn" aria-label="Refresh now" title="Refresh now">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -426,9 +578,7 @@ function renderPage(roomsData, generatedAtISO) {
   </button>
 </div>
 
-<div class="calendar-wrap">
-  <div class="calendar" id="calendar"></div>
-</div>
+<div class="calendar-wrap" id="calendarWrap"></div>
 
 <script>
 const TIMEZONE = ${JSON.stringify(TIMEZONE)};
@@ -436,7 +586,9 @@ const GENERATED_AT = ${JSON.stringify(generatedAtISO)};
 const ROOMS = ${roomsJson};
 const RANGE_DAYS_BEFORE = ${DAYS_BEFORE};
 const RANGE_DAYS_AFTER = ${DAYS_AFTER};
-const ROW_HEIGHT = 48; // px per hour
+const ROW_HEIGHT = 44; // px per hour
+
+// ---------- date helpers ----------
 
 function formatInTZ(date, tz) {
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -458,53 +610,75 @@ function localWallTimeToUTC(y, m, d, h, mi, s, tz) {
   const offset = guessAsIfUTC - guess.getTime();
   return new Date(guess.getTime() - offset);
 }
-function weekdayName(y, m, d) {
-  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' })
+function weekdayName(y, m, d, style) {
+  return new Intl.DateTimeFormat('en-GB', { weekday: style || 'long', timeZone: 'UTC' })
     .format(new Date(Date.UTC(y, m - 1, d)));
 }
-function monthName(y, m, d) {
-  return new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' })
+function monthName(y, m, d, style) {
+  return new Intl.DateTimeFormat('en-GB', { month: style || 'long', timeZone: 'UTC' })
     .format(new Date(Date.UTC(y, m - 1, d)));
 }
-
-const nowParts = getLocalDateParts(new Date(), TIMEZONE);
-let viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
-
-const minDate = shiftDate(viewDate, -RANGE_DAYS_BEFORE);
-const maxDate = shiftDate(viewDate, RANGE_DAYS_AFTER);
-
 function shiftDate(dp, delta) {
   const t = new Date(Date.UTC(dp.y, dp.m - 1, dp.d + delta));
   return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
 }
+function shiftMonth(dp, delta) {
+  const t = new Date(Date.UTC(dp.y, dp.m - 1 + delta, 1));
+  const daysInMonth = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: Math.min(dp.d, daysInMonth) };
+}
 function sameDate(a, b) { return a.y === b.y && a.m === b.m && a.d === b.d; }
-function dateWithinRange(dp) {
+function dateToKey(dp) { return dp.y + '-' + String(dp.m).padStart(2,'0') + '-' + String(dp.d).padStart(2,'0'); }
+function weekdayNum(dp) { return new Date(Date.UTC(dp.y, dp.m - 1, dp.d)).getUTCDay(); } // 0=Sun
+function startOfWeekMon(dp) {
+  const wd = weekdayNum(dp);
+  const diff = (wd === 0) ? 6 : wd - 1; // days since Monday
+  return shiftDate(dp, -diff);
+}
+function dateWithinFetchedRange(dp) {
   const t = Date.UTC(dp.y, dp.m - 1, dp.d);
   return t >= Date.UTC(minDate.y, minDate.m - 1, minDate.d) && t <= Date.UTC(maxDate.y, maxDate.m - 1, maxDate.d);
 }
-
 function formatHourLabel(h) {
   const period = h < 12 ? 'AM' : 'PM';
   let hh = h % 12;
   if (hh === 0) hh = 12;
   return hh + ' ' + period;
 }
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
-function render() {
-  const dayStart = localWallTimeToUTC(viewDate.y, viewDate.m, viewDate.d, 0, 0, 0, TIMEZONE);
-  const dayEnd = localWallTimeToUTC(viewDate.y, viewDate.m, viewDate.d, 23, 59, 59, TIMEZONE);
+// ---------- state ----------
 
-  // clip each room's events to this day, in local wall-clock hours
-  const perRoom = ROOMS.map(room => {
-    const clipped = [];
-    room.events.forEach(ev => {
+const nowParts = getLocalDateParts(new Date(), TIMEZONE);
+let viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
+let viewMode = 'day'; // 'day' | 'week' | 'month'
+let visibleRooms = new Set(ROOMS.map(r => r.name));
+
+const minDate = shiftDate(viewDate, -RANGE_DAYS_BEFORE);
+const maxDate = shiftDate(viewDate, RANGE_DAYS_AFTER);
+
+// ---------- event lookup ----------
+
+// Returns events (across visible rooms) that overlap the given local date,
+// clipped to that date's boundaries, each tagged with its room.
+function eventsForDate(dp) {
+  const dayStart = localWallTimeToUTC(dp.y, dp.m, dp.d, 0, 0, 0, TIMEZONE);
+  const dayEnd = localWallTimeToUTC(dp.y, dp.m, dp.d, 23, 59, 59, TIMEZONE);
+  const result = [];
+  ROOMS.forEach(room => {
+    if (!visibleRooms.has(room.name)) return;
+    (room.events || []).forEach(ev => {
       const s = new Date(ev.start), e = new Date(ev.end);
       if (s <= dayEnd && e >= dayStart) {
         const clipStart = s < dayStart ? dayStart : s;
         const clipEnd = e > dayEnd ? dayEnd : e;
         const sp = getLocalDateParts(clipStart, TIMEZONE);
         const ep = getLocalDateParts(clipEnd, TIMEZONE);
-        clipped.push({
+        result.push({
+          room: room.name,
+          color: room.color,
           summary: ev.summary,
           startHour: sp.h + sp.mi / 60,
           endHour: ep.h + ep.mi / 60 + (ep.h === 23 && ep.mi === 59 ? (60 - ep.s / 60) / 60 : 0),
@@ -513,40 +687,151 @@ function render() {
         });
       }
     });
-    return { room, events: clipped, error: room.error };
+  });
+  result.sort((a, b) => a.startHour - b.startHour);
+  return result;
+}
+
+// ---------- sidebar ----------
+
+function openSidebar(dp) {
+  closeSidebar();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'sidebar-backdrop';
+  backdrop.id = 'sidebarBackdrop';
+  backdrop.addEventListener('click', closeSidebar);
+
+  const panel = document.createElement('div');
+  panel.className = 'sidebar';
+  panel.id = 'sidebarPanel';
+
+  const header = document.createElement('div');
+  header.className = 'sidebar-header';
+  const h2 = document.createElement('h2');
+  h2.textContent = weekdayName(dp.y, dp.m, dp.d) + ', ' + dp.d + ' ' + monthName(dp.y, dp.m, dp.d) + ' ' + dp.y;
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'sidebar-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.textContent = '\\u00d7';
+  closeBtn.addEventListener('click', closeSidebar);
+  header.appendChild(h2);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement('div');
+  body.className = 'sidebar-body';
+  const events = eventsForDate(dp);
+  if (events.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'sidebar-empty';
+    empty.textContent = 'No meetings booked in any visible room.';
+    body.appendChild(empty);
+  } else {
+    events.forEach(ev => {
+      const item = document.createElement('div');
+      item.className = 'sidebar-item';
+      item.style.borderLeftColor = ev.color;
+      item.innerHTML =
+        '<div class="room-tag">' + escapeHtml(ev.room) + '</div>' +
+        '<div class="title">' + escapeHtml(ev.summary) + '</div>' +
+        '<div class="time">' + ev.startLabel + '\\u2013' + ev.endLabel + '</div>';
+      body.appendChild(item);
+    });
+  }
+
+  panel.appendChild(header);
+  panel.appendChild(body);
+  document.body.appendChild(backdrop);
+  document.body.appendChild(panel);
+}
+function closeSidebar() {
+  const b = document.getElementById('sidebarBackdrop');
+  const p = document.getElementById('sidebarPanel');
+  if (b) b.remove();
+  if (p) p.remove();
+}
+
+// ---------- time-grid render (day & week share this) ----------
+
+function renderTimeGrid(days) {
+  const wrap = document.getElementById('calendarWrap');
+  const rooms = ROOMS.filter(r => visibleRooms.has(r.name));
+  const cal = document.createElement('div');
+  cal.className = 'calendar';
+  const colCount = 1 + days.length * Math.max(rooms.length, 1);
+  cal.style.gridTemplateColumns = '56px repeat(' + (days.length * Math.max(rooms.length, 1)) + ', minmax(' + (days.length > 1 ? 90 : 160) + 'px, 1fr))';
+
+  // gather all events per day/room to compute dynamic hour range
+  const perDay = days.map(dp => {
+    const dayStart = localWallTimeToUTC(dp.y, dp.m, dp.d, 0, 0, 0, TIMEZONE);
+    const dayEnd = localWallTimeToUTC(dp.y, dp.m, dp.d, 23, 59, 59, TIMEZONE);
+    const perRoom = rooms.map(room => {
+      const clipped = [];
+      (room.events || []).forEach(ev => {
+        const s = new Date(ev.start), e = new Date(ev.end);
+        if (s <= dayEnd && e >= dayStart) {
+          const clipStart = s < dayStart ? dayStart : s;
+          const clipEnd = e > dayEnd ? dayEnd : e;
+          const sp = getLocalDateParts(clipStart, TIMEZONE);
+          const ep = getLocalDateParts(clipEnd, TIMEZONE);
+          clipped.push({
+            summary: ev.summary,
+            startHour: sp.h + sp.mi / 60,
+            endHour: ep.h + ep.mi / 60 + (ep.h === 23 && ep.mi === 59 ? (60 - ep.s / 60) / 60 : 0),
+            startLabel: String(sp.h).padStart(2, '0') + ':' + String(sp.mi).padStart(2, '0'),
+            endLabel: String(ep.h).padStart(2, '0') + ':' + String(ep.mi).padStart(2, '0'),
+          });
+        }
+      });
+      return { room, events: clipped, error: room.error };
+    });
+    return { dp, perRoom };
   });
 
-  // dynamic hour range: default 7-19, expand to fit events
   let minHour = 7, maxHour = 19;
-  perRoom.forEach(r => r.events.forEach(ev => {
+  perDay.forEach(d => d.perRoom.forEach(r => r.events.forEach(ev => {
     minHour = Math.min(minHour, Math.floor(ev.startHour));
     maxHour = Math.max(maxHour, Math.ceil(ev.endHour));
-  }));
+  })));
   minHour = Math.max(0, minHour);
   maxHour = Math.min(24, maxHour);
   const totalHours = maxHour - minHour;
   const gridHeight = totalHours * ROW_HEIGHT;
 
-  const cal = document.getElementById('calendar');
-  cal.style.gridTemplateRows = '44px ' + gridHeight + 'px';
-  cal.innerHTML = '';
+  cal.style.gridTemplateRows = '30px 26px ' + gridHeight + 'px';
 
-  // top-left empty corner
+  // top-left corner
   const corner = document.createElement('div');
   corner.className = 'gutter-header';
+  corner.style.gridColumn = '1';
   cal.appendChild(corner);
 
-  // room headers
-  perRoom.forEach(r => {
-    const h = document.createElement('div');
-    h.className = 'room-header';
-    h.innerHTML = '<span class="dot" style="background:' + r.room.color + '"></span>' + r.room.name;
-    cal.appendChild(h);
+  // day headers + room mini-headers
+  perDay.forEach((d, dayIdx) => {
+    const roomSpan = Math.max(rooms.length, 1);
+    const startCol = 2 + dayIdx * roomSpan;
+
+    const dayHeader = document.createElement('div');
+    dayHeader.className = 'day-group-header' + (sameDate(d.dp, nowParts) ? ' is-today' : '');
+    dayHeader.style.gridColumn = startCol + ' / span ' + roomSpan;
+    dayHeader.innerHTML = '<span class="wd">' + weekdayName(d.dp.y, d.dp.m, d.dp.d, 'short') + '</span>' + d.dp.d;
+    if (days.length > 1) {
+      dayHeader.addEventListener('click', () => openSidebar(d.dp));
+    }
+    cal.appendChild(dayHeader);
+
+    rooms.forEach((room, i) => {
+      const rh = document.createElement('div');
+      rh.className = 'room-header';
+      rh.style.gridColumn = String(startCol + i);
+      rh.innerHTML = '<span class="dot" style="background:' + room.color + '"></span>' + room.name;
+      cal.appendChild(rh);
+    });
   });
 
-  // gutter (hour labels)
+  // gutter
   const gutter = document.createElement('div');
   gutter.className = 'gutter';
+  gutter.style.gridColumn = '1';
   gutter.style.height = gridHeight + 'px';
   for (let h = minHour; h <= maxHour; h++) {
     const label = document.createElement('div');
@@ -557,92 +842,220 @@ function render() {
   }
   cal.appendChild(gutter);
 
-  const isToday = sameDate(viewDate, nowParts);
+  // room columns
+  perDay.forEach((d, dayIdx) => {
+    const roomSpan = Math.max(rooms.length, 1);
+    const startCol = 2 + dayIdx * roomSpan;
+    const isLastRoomOfDay = (i) => i === rooms.length - 1;
 
-  perRoom.forEach(r => {
-    const col = document.createElement('div');
-    col.className = 'room-col';
-    col.style.height = gridHeight + 'px';
-
-    if (r.error) {
-      const err = document.createElement('div');
-      err.className = 'error-note';
-      err.textContent = 'Could not load this calendar';
-      col.appendChild(err);
+    if (rooms.length === 0) {
+      const col = document.createElement('div');
+      col.className = 'room-col day-divider';
+      col.style.gridColumn = String(startCol);
+      col.style.height = gridHeight + 'px';
+      cal.appendChild(col);
+      return;
     }
 
-    for (let h = minHour; h <= maxHour; h++) {
-      const line = document.createElement('div');
-      line.className = 'hour-line';
-      line.style.top = ((h - minHour) * ROW_HEIGHT) + 'px';
-      col.appendChild(line);
-    }
+    d.perRoom.forEach((r, i) => {
+      const col = document.createElement('div');
+      col.className = 'room-col' + (isLastRoomOfDay(i) ? ' day-divider' : '');
+      col.style.gridColumn = String(startCol + i);
+      col.style.height = gridHeight + 'px';
 
-    r.events.forEach(ev => {
-      const block = document.createElement('div');
-      block.className = 'event-block';
-      const top = (ev.startHour - minHour) * ROW_HEIGHT;
-      const height = Math.max(18, (ev.endHour - ev.startHour) * ROW_HEIGHT - 2);
-      block.style.top = top + 'px';
-      block.style.height = height + 'px';
-      block.style.background = r.room.color + '22';
-      block.style.borderLeftColor = r.room.color;
-      block.innerHTML = '<div class="event-title">' + escapeHtml(ev.summary) + '</div>' +
-        '<div class="event-time">' + ev.startLabel + '\u2013' + ev.endLabel + '</div>';
-      col.appendChild(block);
-    });
+      if (r.error) {
+        const err = document.createElement('div');
+        err.className = 'error-note';
+        err.textContent = 'Could not load';
+        col.appendChild(err);
+      }
 
-    if (isToday) {
-      const nowP = getLocalDateParts(new Date(), TIMEZONE);
-      const nowHour = nowP.h + nowP.mi / 60;
-      if (nowHour >= minHour && nowHour <= maxHour) {
+      for (let h = minHour; h <= maxHour; h++) {
         const line = document.createElement('div');
-        line.className = 'now-line';
-        line.style.top = ((nowHour - minHour) * ROW_HEIGHT) + 'px';
-        const dot = document.createElement('div');
-        dot.className = 'now-dot';
-        line.appendChild(dot);
+        line.className = 'hour-line';
+        line.style.top = ((h - minHour) * ROW_HEIGHT) + 'px';
         col.appendChild(line);
       }
-    }
 
-    cal.appendChild(col);
+      r.events.forEach(ev => {
+        const block = document.createElement('div');
+        block.className = 'event-block';
+        const top = (ev.startHour - minHour) * ROW_HEIGHT;
+        const height = Math.max(16, (ev.endHour - ev.startHour) * ROW_HEIGHT - 2);
+        block.style.top = top + 'px';
+        block.style.height = height + 'px';
+        block.style.background = r.room.color + '22';
+        block.style.borderLeftColor = r.room.color;
+        block.innerHTML = '<div class="event-title">' + escapeHtml(ev.summary) + '</div>' +
+          '<div class="event-time">' + ev.startLabel + '\\u2013' + ev.endLabel + '</div>';
+        col.appendChild(block);
+      });
+
+      if (sameDate(d.dp, nowParts)) {
+        const nowHour = nowParts.h + nowParts.mi / 60;
+        if (nowHour >= minHour && nowHour <= maxHour) {
+          const line = document.createElement('div');
+          line.className = 'now-line';
+          line.style.top = ((nowHour - minHour) * ROW_HEIGHT) + 'px';
+          const dot = document.createElement('div');
+          dot.className = 'now-dot';
+          line.appendChild(dot);
+          col.appendChild(line);
+        }
+      }
+
+      cal.appendChild(col);
+    });
   });
 
-  document.getElementById('dateLabel').textContent =
-    weekdayName(viewDate.y, viewDate.m, viewDate.d) + ', ' + viewDate.d + ' ' + monthName(viewDate.y, viewDate.m, viewDate.d) + ' ' + viewDate.y;
+  wrap.innerHTML = '';
+  wrap.appendChild(cal);
+}
+
+// ---------- month render ----------
+
+function renderMonthGrid(anchor) {
+  const wrap = document.getElementById('calendarWrap');
+  const grid = document.createElement('div');
+  grid.className = 'month-grid';
+
+  const weekdays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  weekdays.forEach(wd => {
+    const h = document.createElement('div');
+    h.className = 'month-weekday';
+    h.textContent = wd;
+    grid.appendChild(h);
+  });
+
+  const firstOfMonth = { y: anchor.y, m: anchor.m, d: 1 };
+  const gridStart = startOfWeekMon(firstOfMonth);
+  const rooms = ROOMS.filter(r => visibleRooms.has(r.name));
+
+  for (let i = 0; i < 42; i++) {
+    const dp = shiftDate(gridStart, i);
+    const cell = document.createElement('div');
+    const outside = dp.m !== anchor.m;
+    cell.className = 'month-cell' + (outside ? ' outside' : '') + (sameDate(dp, nowParts) ? ' is-today' : '');
+
+    const num = document.createElement('div');
+    num.className = 'day-num';
+    num.textContent = dp.d;
+    cell.appendChild(num);
+
+    const events = eventsForDate(dp).filter(ev => rooms.some(r => r.name === ev.room));
+    const maxChips = 3;
+    events.slice(0, maxChips).forEach(ev => {
+      const chip = document.createElement('div');
+      chip.className = 'month-chip';
+      chip.style.borderLeftColor = ev.color;
+      chip.style.background = ev.color + '1a';
+      chip.textContent = ev.startLabel + ' ' + ev.summary;
+      cell.appendChild(chip);
+    });
+    if (events.length > maxChips) {
+      const more = document.createElement('div');
+      more.className = 'month-more';
+      more.textContent = '+' + (events.length - maxChips) + ' more';
+      cell.appendChild(more);
+    }
+
+    cell.addEventListener('click', () => openSidebar(dp));
+    grid.appendChild(cell);
+
+    if (i === 41) break;
+  }
+
+  wrap.innerHTML = '';
+  wrap.appendChild(grid);
+}
+
+// ---------- top-level render / controls ----------
+
+function render() {
+  closeSidebar();
+
+  if (viewMode === 'day') {
+    renderTimeGrid([viewDate]);
+    document.getElementById('dateLabel').textContent =
+      weekdayName(viewDate.y, viewDate.m, viewDate.d) + ', ' + viewDate.d + ' ' + monthName(viewDate.y, viewDate.m, viewDate.d) + ' ' + viewDate.y;
+  } else if (viewMode === 'week') {
+    const weekStart = startOfWeekMon(viewDate);
+    const days = [];
+    for (let i = 0; i < 7; i++) days.push(shiftDate(weekStart, i));
+    renderTimeGrid(days);
+    const weekEnd = days[6];
+    const sameMonth = weekStart.m === weekEnd.m;
+    document.getElementById('dateLabel').textContent = sameMonth
+      ? weekStart.d + '\\u2013' + weekEnd.d + ' ' + monthName(weekEnd.y, weekEnd.m, weekEnd.d) + ' ' + weekEnd.y
+      : weekStart.d + ' ' + monthName(weekStart.y, weekStart.m, weekStart.d, 'short') + ' \\u2013 ' + weekEnd.d + ' ' + monthName(weekEnd.y, weekEnd.m, weekEnd.d, 'short') + ' ' + weekEnd.y;
+  } else if (viewMode === 'month') {
+    renderMonthGrid(viewDate);
+    document.getElementById('dateLabel').textContent = monthName(viewDate.y, viewDate.m, viewDate.d) + ' ' + viewDate.y;
+  }
 
   const genParts = getLocalDateParts(new Date(GENERATED_AT), TIMEZONE);
   document.getElementById('updatedLabel').textContent =
     'Updated ' + String(genParts.h).padStart(2,'0') + ':' + String(genParts.mi).padStart(2,'0');
 
-  document.getElementById('prevBtn').disabled = !dateWithinRange(shiftDate(viewDate, -1));
-  document.getElementById('nextBtn').disabled = !dateWithinRange(shiftDate(viewDate, 1));
+  document.getElementById('dateInput').value = dateToKey(viewDate);
+
+  const prevTarget = viewMode === 'month' ? shiftMonth(viewDate, -1) : shiftDate(viewDate, viewMode === 'week' ? -7 : -1);
+  const nextTarget = viewMode === 'month' ? shiftMonth(viewDate, 1) : shiftDate(viewDate, viewMode === 'week' ? 7 : 1);
+  document.getElementById('prevBtn').disabled = viewMode !== 'month' && !dateWithinFetchedRange(prevTarget);
+  document.getElementById('nextBtn').disabled = viewMode !== 'month' && !dateWithinFetchedRange(nextTarget);
+
+  document.querySelectorAll('.view-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === viewMode);
+  });
 }
 
-function escapeHtml(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+// ---------- wire up controls ----------
 
 document.getElementById('prevBtn').addEventListener('click', () => {
-  const d = shiftDate(viewDate, -1);
-  if (dateWithinRange(d)) { viewDate = d; render(); }
+  viewDate = viewMode === 'month' ? shiftMonth(viewDate, -1) : shiftDate(viewDate, viewMode === 'week' ? -7 : -1);
+  render();
 });
 document.getElementById('nextBtn').addEventListener('click', () => {
-  const d = shiftDate(viewDate, 1);
-  if (dateWithinRange(d)) { viewDate = d; render(); }
+  viewDate = viewMode === 'month' ? shiftMonth(viewDate, 1) : shiftDate(viewDate, viewMode === 'week' ? 7 : 1);
+  render();
 });
 document.getElementById('todayBtn').addEventListener('click', () => {
   viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
   render();
 });
+document.getElementById('dateInput').addEventListener('change', (e) => {
+  const [y, m, d] = e.target.value.split('-').map(Number);
+  if (y && m && d) { viewDate = { y, m, d }; render(); }
+});
 document.getElementById('refreshBtn').addEventListener('click', () => {
   location.reload();
 });
+document.getElementById('viewToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('.view-btn');
+  if (!btn) return;
+  viewMode = btn.dataset.mode;
+  render();
+});
+
+const filterWrap = document.getElementById('roomFilters');
+ROOMS.forEach(room => {
+  const chip = document.createElement('div');
+  chip.className = 'room-chip';
+  chip.innerHTML = '<span class="dot" style="background:' + room.color + '"></span>' + room.name;
+  chip.addEventListener('click', () => {
+    if (visibleRooms.has(room.name)) {
+      if (visibleRooms.size > 1) visibleRooms.delete(room.name); // keep at least one room visible
+    } else {
+      visibleRooms.add(room.name);
+    }
+    chip.classList.toggle('off', !visibleRooms.has(room.name));
+    render();
+  });
+  filterWrap.appendChild(chip);
+});
 
 // Auto-refresh: reload the page periodically to pick up whatever the
-// GitHub Action last committed. This re-fetches the whole HTML file, so
-// it also naturally shifts the fetched date window forward as days pass.
+// GitHub Action last committed.
 const AUTO_REFRESH_MINUTES = 5;
 setTimeout(() => location.reload(), AUTO_REFRESH_MINUTES * 60 * 1000);
 
