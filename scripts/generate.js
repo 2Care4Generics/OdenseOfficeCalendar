@@ -300,6 +300,22 @@ function renderPage(roomsData, generatedAtISO) {
     color: var(--text-primary);
   }
   .today-btn:hover { background: var(--header-bg); }
+  .refresh-btn {
+    border: 1px solid var(--grid-line);
+    background: #fff;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .refresh-btn:hover { background: var(--header-bg); }
+  .refresh-btn.spinning svg { animation: spin 0.6s linear; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .date-label {
     font-size: 17px;
     font-weight: 600;
@@ -401,6 +417,13 @@ function renderPage(roomsData, generatedAtISO) {
   <button class="today-btn" id="todayBtn">Today</button>
   <span class="date-label" id="dateLabel"></span>
   <span class="updated" id="updatedLabel"></span>
+  <button class="refresh-btn" id="refreshBtn" aria-label="Refresh now" title="Refresh now">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"></polyline>
+      <polyline points="1 20 1 14 7 14"></polyline>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+    </svg>
+  </button>
 </div>
 
 <div class="calendar-wrap">
@@ -613,6 +636,15 @@ document.getElementById('todayBtn').addEventListener('click', () => {
   viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
   render();
 });
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  location.reload();
+});
+
+// Auto-refresh: reload the page periodically to pick up whatever the
+// GitHub Action last committed. This re-fetches the whole HTML file, so
+// it also naturally shifts the fetched date window forward as days pass.
+const AUTO_REFRESH_MINUTES = 5;
+setTimeout(() => location.reload(), AUTO_REFRESH_MINUTES * 60 * 1000);
 
 render();
 </script>
