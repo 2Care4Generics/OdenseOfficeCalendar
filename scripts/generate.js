@@ -278,7 +278,7 @@ function renderPage(roomsData, generatedAtISO) {
     flex-wrap: wrap;
     row-gap: 8px;
   }
-  .nav-btn, .refresh-btn {
+  .nav-btn {
     border: 1px solid var(--grid-line);
     background: #fff;
     border-radius: 4px;
@@ -291,7 +291,7 @@ function renderPage(roomsData, generatedAtISO) {
     align-items: center;
     justify-content: center;
   }
-  .nav-btn:hover, .refresh-btn:hover, .view-btn:hover { background: var(--header-bg); }
+  .nav-btn:hover, .view-btn:hover { background: var(--header-bg); }
   .nav-btn:disabled { opacity: 0.35; cursor: default; }
   .date-input {
     border: 1px solid var(--grid-line);
@@ -615,13 +615,6 @@ function renderPage(roomsData, generatedAtISO) {
   <span class="updated">
     <span id="updatedLabel"></span> · refreshes in <span id="refreshCountdown"></span>
   </span>
-  <button class="refresh-btn" id="refreshBtn" aria-label="Refresh now" title="Refresh now">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="23 4 23 10 17 10"></polyline>
-      <polyline points="1 20 1 14 7 14"></polyline>
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-    </svg>
-  </button>
 </div>
 
 <div class="calendar-wrap" id="calendarWrap"></div>
@@ -1135,9 +1128,6 @@ document.getElementById('dateInput').addEventListener('change', (e) => {
   const [y, m, d] = e.target.value.split('-').map(Number);
   if (y && m && d) { viewDate = { y, m, d }; render(); }
 });
-document.getElementById('refreshBtn').addEventListener('click', () => {
-  hardReload();
-});
 function hardReload() {
   // Cache-busting: a plain location.reload() can be served a cached copy
   // by the browser or GitHub Pages' CDN. Appending a unique query string
@@ -1171,8 +1161,24 @@ ROOMS.forEach(room => {
 // Auto-refresh: reload the page periodically to pick up whatever the
 // GitHub Action last committed. A visible countdown makes it clear this
 // is actually running, rather than the page silently going stale.
+//
+// The countdown is anchored to GENERATED_AT (embedded at build time), not
+// to when this particular page load happened — so a manual browser
+// refresh, or the auto-refresh itself, doesn't reset the clock back to
+// a full 5:00. It always reflects time remaining in the real cycle.
 const AUTO_REFRESH_MINUTES = 5;
-let secondsUntilRefresh = AUTO_REFRESH_MINUTES * 60;
+const RETRY_SECONDS_WHEN_OVERDUE = 30; // polling interval if the Action is running late
+const generatedAtMs = new Date(GENERATED_AT).getTime();
+
+function computeSecondsUntilRefresh() {
+  const elapsedSeconds = (Date.now() - generatedAtMs) / 1000;
+  const remaining = AUTO_REFRESH_MINUTES * 60 - elapsedSeconds;
+  // If the Action is running behind schedule, don't hammer reloads —
+  // just retry at a fixed cadence until fresh content actually shows up.
+  return remaining > 0 ? Math.ceil(remaining) : RETRY_SECONDS_WHEN_OVERDUE;
+}
+
+let secondsUntilRefresh = computeSecondsUntilRefresh();
 function tickCountdown() {
   const mm = Math.floor(secondsUntilRefresh / 60);
   const ss = secondsUntilRefresh % 60;
