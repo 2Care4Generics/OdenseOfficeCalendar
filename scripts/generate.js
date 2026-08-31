@@ -291,18 +291,8 @@ function renderPage(roomsData, generatedAtISO) {
     align-items: center;
     justify-content: center;
   }
-  .nav-btn:hover, .refresh-btn:hover, .today-btn:hover, .view-btn:hover { background: var(--header-bg); }
+  .nav-btn:hover, .refresh-btn:hover, .view-btn:hover { background: var(--header-bg); }
   .nav-btn:disabled { opacity: 0.35; cursor: default; }
-  .today-btn {
-    border: 1px solid var(--grid-line);
-    background: #fff;
-    border-radius: 4px;
-    padding: 0 14px;
-    height: 32px;
-    font-size: 14px;
-    cursor: pointer;
-    color: var(--text-primary);
-  }
   .date-input {
     border: 1px solid var(--grid-line);
     border-radius: 4px;
@@ -373,15 +363,16 @@ function renderPage(roomsData, generatedAtISO) {
   .day-group-header {
     grid-row: 1;
     border-bottom: 1px solid var(--grid-line);
-    padding: 8px 4px 4px;
-    font-size: 12px;
+    padding: 8px 6px;
+    font-size: 13px;
     font-weight: 600;
     text-align: center;
     cursor: pointer;
+    white-space: nowrap;
     background: #fff;
   }
   .day-group-header:hover { background: var(--header-bg); }
-  .day-group-header .wd { color: var(--text-secondary); font-weight: 500; display: block; font-size: 11px; }
+  .day-group-header .wd { color: var(--text-secondary); font-weight: 500; margin-right: 5px; }
   .day-group-header.is-today { color: var(--accent); }
   .room-header {
     grid-row: 2;
@@ -407,7 +398,7 @@ function renderPage(roomsData, generatedAtISO) {
     border-right: 1px solid var(--grid-line);
     grid-row: 3;
   }
-  .day-divider { border-right: 2px solid var(--grid-line); }
+  .day-divider { border-right: 3px solid #8a8886 !important; }
   .hour-line {
     position: absolute;
     left: 0; right: 0;
@@ -549,6 +540,60 @@ function renderPage(roomsData, generatedAtISO) {
   }
   .sidebar-item .title { font-size: 13px; font-weight: 600; }
   .sidebar-item .time { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* ---- Single-event detail modal ---- */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .event-modal {
+    background: #fff;
+    border-radius: 8px;
+    border-left: 5px solid;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.25);
+    width: min(380px, 90vw);
+    padding: 20px 22px;
+  }
+  .event-modal .modal-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .event-modal .room-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+  }
+  .event-modal .room-tag .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .event-modal .modal-close {
+    border: none;
+    background: none;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 2px;
+  }
+  .event-modal .modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    line-height: 1.35;
+  }
+  .event-modal .modal-row {
+    font-size: 13.5px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .event-modal .modal-row .label { color: var(--text-secondary); }
 </style>
 </head>
 <body>
@@ -556,7 +601,6 @@ function renderPage(roomsData, generatedAtISO) {
 <div class="topbar">
   <button class="nav-btn" id="prevBtn" aria-label="Previous">&#8249;</button>
   <button class="nav-btn" id="nextBtn" aria-label="Next">&#8250;</button>
-  <button class="today-btn" id="todayBtn">Today</button>
   <input type="date" class="date-input" id="dateInput">
   <span class="date-label" id="dateLabel"></span>
 
@@ -568,7 +612,9 @@ function renderPage(roomsData, generatedAtISO) {
 
   <div class="room-filters" id="roomFilters"></div>
 
-  <span class="updated" id="updatedLabel"></span>
+  <span class="updated">
+    <span id="updatedLabel"></span> · refreshes in <span id="refreshCountdown"></span>
+  </span>
   <button class="refresh-btn" id="refreshBtn" aria-label="Refresh now" title="Refresh now">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="23 4 23 10 17 10"></polyline>
@@ -750,6 +796,61 @@ function closeSidebar() {
   if (p) p.remove();
 }
 
+// ---------- single-event detail modal ----------
+
+function openEventDetail(ev, dp) {
+  closeEventDetail();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.id = 'eventModalBackdrop';
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeEventDetail();
+  });
+
+  const modal = document.createElement('div');
+  modal.className = 'event-modal';
+  modal.style.borderLeftColor = ev.color;
+
+  const top = document.createElement('div');
+  top.className = 'modal-top';
+  const roomTag = document.createElement('span');
+  roomTag.className = 'room-tag';
+  roomTag.innerHTML = '<span class="dot" style="background:' + ev.color + '"></span>' + escapeHtml(ev.room);
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'modal-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.textContent = '\\u00d7';
+  closeBtn.addEventListener('click', closeEventDetail);
+  top.appendChild(roomTag);
+  top.appendChild(closeBtn);
+
+  const dateStr = weekdayName(dp.y, dp.m, dp.d) + ', ' + dp.d + ' ' + monthName(dp.y, dp.m, dp.d) + ' ' + dp.y;
+
+  const title = document.createElement('div');
+  title.className = 'modal-title';
+  title.textContent = ev.summary;
+
+  const dateRow = document.createElement('div');
+  dateRow.className = 'modal-row';
+  dateRow.innerHTML = '<span class="label">Date: </span>' + escapeHtml(dateStr);
+
+  const timeRow = document.createElement('div');
+  timeRow.className = 'modal-row';
+  timeRow.innerHTML = '<span class="label">Time: </span>' + ev.startLabel + '\\u2013' + ev.endLabel;
+
+  modal.appendChild(top);
+  modal.appendChild(title);
+  modal.appendChild(dateRow);
+  modal.appendChild(timeRow);
+
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
+}
+function closeEventDetail() {
+  const b = document.getElementById('eventModalBackdrop');
+  if (b) b.remove();
+}
+
 // ---------- time-grid render (day & week share this) ----------
 
 function renderTimeGrid(days) {
@@ -811,7 +912,7 @@ function renderTimeGrid(days) {
     const startCol = 2 + dayIdx * roomSpan;
 
     const dayHeader = document.createElement('div');
-    dayHeader.className = 'day-group-header' + (sameDate(d.dp, nowParts) ? ' is-today' : '');
+    dayHeader.className = 'day-group-header day-divider' + (sameDate(d.dp, nowParts) ? ' is-today' : '');
     dayHeader.style.gridColumn = startCol + ' / span ' + roomSpan;
     dayHeader.innerHTML = '<span class="wd">' + weekdayName(d.dp.y, d.dp.m, d.dp.d, 'short') + '</span>' + d.dp.d;
     if (days.length > 1) {
@@ -821,7 +922,7 @@ function renderTimeGrid(days) {
 
     rooms.forEach((room, i) => {
       const rh = document.createElement('div');
-      rh.className = 'room-header';
+      rh.className = 'room-header' + (i === rooms.length - 1 ? ' day-divider' : '');
       rh.style.gridColumn = String(startCol + i);
       rh.innerHTML = '<span class="dot" style="background:' + room.color + '"></span>' + room.name;
       cal.appendChild(rh);
@@ -886,8 +987,13 @@ function renderTimeGrid(days) {
         block.style.height = height + 'px';
         block.style.background = r.room.color + '22';
         block.style.borderLeftColor = r.room.color;
+        block.style.cursor = 'pointer';
         block.innerHTML = '<div class="event-title">' + escapeHtml(ev.summary) + '</div>' +
           '<div class="event-time">' + ev.startLabel + '\\u2013' + ev.endLabel + '</div>';
+        block.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openEventDetail({ room: r.room.name, color: r.room.color, summary: ev.summary, startLabel: ev.startLabel, endLabel: ev.endLabel }, d.dp);
+        });
         col.appendChild(block);
       });
 
@@ -949,7 +1055,12 @@ function renderMonthGrid(anchor) {
       chip.className = 'month-chip';
       chip.style.borderLeftColor = ev.color;
       chip.style.background = ev.color + '1a';
+      chip.style.cursor = 'pointer';
       chip.textContent = ev.startLabel + ' ' + ev.summary;
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEventDetail(ev, dp);
+      });
       cell.appendChild(chip);
     });
     if (events.length > maxChips) {
@@ -973,6 +1084,7 @@ function renderMonthGrid(anchor) {
 
 function render() {
   closeSidebar();
+  closeEventDetail();
 
   if (viewMode === 'day') {
     renderTimeGrid([viewDate]);
@@ -1019,17 +1131,19 @@ document.getElementById('nextBtn').addEventListener('click', () => {
   viewDate = viewMode === 'month' ? shiftMonth(viewDate, 1) : shiftDate(viewDate, viewMode === 'week' ? 7 : 1);
   render();
 });
-document.getElementById('todayBtn').addEventListener('click', () => {
-  viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
-  render();
-});
 document.getElementById('dateInput').addEventListener('change', (e) => {
   const [y, m, d] = e.target.value.split('-').map(Number);
   if (y && m && d) { viewDate = { y, m, d }; render(); }
 });
 document.getElementById('refreshBtn').addEventListener('click', () => {
-  location.reload();
+  hardReload();
 });
+function hardReload() {
+  // Cache-busting: a plain location.reload() can be served a cached copy
+  // by the browser or GitHub Pages' CDN. Appending a unique query string
+  // forces a genuine network fetch of the latest committed file.
+  location.href = location.pathname + '?_=' + Date.now();
+}
 document.getElementById('viewToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.view-btn');
   if (!btn) return;
@@ -1055,9 +1169,23 @@ ROOMS.forEach(room => {
 });
 
 // Auto-refresh: reload the page periodically to pick up whatever the
-// GitHub Action last committed.
+// GitHub Action last committed. A visible countdown makes it clear this
+// is actually running, rather than the page silently going stale.
 const AUTO_REFRESH_MINUTES = 5;
-setTimeout(() => location.reload(), AUTO_REFRESH_MINUTES * 60 * 1000);
+let secondsUntilRefresh = AUTO_REFRESH_MINUTES * 60;
+function tickCountdown() {
+  const mm = Math.floor(secondsUntilRefresh / 60);
+  const ss = secondsUntilRefresh % 60;
+  const el = document.getElementById('refreshCountdown');
+  if (el) el.textContent = mm + ':' + String(ss).padStart(2, '0');
+  if (secondsUntilRefresh <= 0) {
+    hardReload();
+    return;
+  }
+  secondsUntilRefresh--;
+}
+tickCountdown();
+setInterval(tickCountdown, 1000);
 
 render();
 </script>
