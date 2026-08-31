@@ -699,7 +699,7 @@ function escapeHtml(str) {
 
 const nowParts = getLocalDateParts(new Date(), TIMEZONE);
 let viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
-let viewMode = 'day'; // 'day' | 'week' | 'month'
+let viewMode = 'week'; // 'day' | 'week' | 'month'
 let visibleRooms = new Set(ROOMS.map(r => r.name));
 
 const minDate = shiftDate(viewDate, -RANGE_DAYS_BEFORE);
