@@ -613,7 +613,7 @@ function renderPage(roomsData, generatedAtISO) {
   <div class="room-filters" id="roomFilters"></div>
 
   <span class="updated">
-    <span id="updatedLabel"></span> · refreshes in <span id="refreshCountdown"></span>
+    <span id="updatedLabel"></span>
   </span>
 </div>
 
@@ -1217,44 +1217,38 @@ ROOMS.forEach(room => {
   filterWrap.appendChild(chip);
 });
 
-// Auto-refresh: reload the page periodically to pick up whatever the
-// GitHub Action last committed. A visible countdown makes it clear this
-// is actually running, rather than the page silently going stale.
+// Auto-refresh: silently reload the page periodically to pick up whatever
+// the GitHub Action last committed. No visible countdown — the "Updated
+// HH:MM" timestamp above is the only user-facing indicator of freshness.
 //
-// The countdown is anchored to GENERATED_AT (embedded at build time), not
-// to when this particular page load happened — so a manual browser
-// refresh, or the auto-refresh itself, doesn't reset the clock back to
-// a full cycle. It always reflects time remaining in the real cycle.
+// The cycle is anchored to GENERATED_AT (embedded at build time), not to
+// when this particular page load happened — so a manual browser refresh,
+// or the auto-refresh itself, doesn't restart the clock from scratch.
 //
-// This matches the external cron-job.org schedule (every 1 minute) that
+// This matches the external cron-job.org schedule (every 1.5 minutes) that
 // triggers the Action via workflow_dispatch, not GitHub's own built-in
 // schedule trigger.
-const AUTO_REFRESH_MINUTES = 1;
+const AUTO_REFRESH_SECONDS = 90;
 const RETRY_SECONDS_WHEN_OVERDUE = 15; // polling interval if the Action is running late
 const generatedAtMs = new Date(GENERATED_AT).getTime();
 
 function computeSecondsUntilRefresh() {
   const elapsedSeconds = (Date.now() - generatedAtMs) / 1000;
-  const remaining = AUTO_REFRESH_MINUTES * 60 - elapsedSeconds;
+  const remaining = AUTO_REFRESH_SECONDS - elapsedSeconds;
   // If the Action is running behind schedule, don't hammer reloads —
   // just retry at a fixed cadence until fresh content actually shows up.
   return remaining > 0 ? Math.ceil(remaining) : RETRY_SECONDS_WHEN_OVERDUE;
 }
 
 let secondsUntilRefresh = computeSecondsUntilRefresh();
-function tickCountdown() {
-  const mm = Math.floor(secondsUntilRefresh / 60);
-  const ss = secondsUntilRefresh % 60;
-  const el = document.getElementById('refreshCountdown');
-  if (el) el.textContent = mm + ':' + String(ss).padStart(2, '0');
+function checkRefresh() {
   if (secondsUntilRefresh <= 0) {
     hardReload();
     return;
   }
   secondsUntilRefresh--;
 }
-tickCountdown();
-setInterval(tickCountdown, 1000);
+setInterval(checkRefresh, 1000);
 
 render();
 </script>
