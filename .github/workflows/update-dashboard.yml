@@ -2,9 +2,11 @@ name: Update Room Dashboard
 
 on:
   schedule:
-    # Runs every 5 minutes. GitHub's practical minimum is ~5 minutes, and
-    # scheduled runs can occasionally be delayed further under GitHub's own load.
-    - cron: '*/5 * * * *'
+    # Runs every 5 minutes, offset by 2 minutes past the mark (:02, :07, :12...).
+    # GitHub explicitly documents that schedules landing on round times like
+    # :00/:05/:10 queue behind everyone else's identical schedules and can be
+    # delayed; an odd offset avoids that congestion.
+    - cron: '2-59/5 * * * *'
   workflow_dispatch: {} # lets you trigger it manually from the Actions tab
   push:
     branches: [main]
