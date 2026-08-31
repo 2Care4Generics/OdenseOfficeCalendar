@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="60">
+  <title>Room Status</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#F9FAFB; margin:0; padding:24px; }
+    h1 { font-size: 20px; color:#111827; margin-bottom: 4px; }
+    .timestamp { color:#6B7280; font-size: 13px; margin-bottom: 24px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; max-width: 900px; }
+    .card { border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .room-name { font-size: 18px; font-weight:600; color:#111827; }
+    .badge { color:white; font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; letter-spacing:0.5px; }
+    .detail { font-size: 14px; color:#374151; margin-bottom: 8px; }
+    .upcoming { margin:0; padding-left:18px; font-size:12px; color:#6B7280; }
+    .upcoming li { margin-bottom:2px; }
+  </style>
+</head>
+<body>
+  <h1>Meeting Room Status</h1>
+  <div class="timestamp">Updated 31/08/2026 10:26 (Europe/Copenhagen) · page checks for a refresh every 60s</div>
+  <div class="grid">
+    
+      <div class="card" style="background:#DCFCE7; border-top: 6px solid #4F46E5;">
+        <div class="card-header">
+          <span class="room-name">beC</span>
+          <span class="badge" style="background:#16A34A">FREE</span>
+        </div>
+        <div class="detail">Free for the rest of the day</div>
+        
+      </div>
+      <div class="card" style="background:#DCFCE7; border-top: 6px solid #059669;">
+        <div class="card-header">
+          <span class="room-name">beJava</span>
+          <span class="badge" style="background:#16A34A">FREE</span>
+        </div>
+        <div class="detail">Free for the rest of the day</div>
+        
+      </div>
+      <div class="card" style="background:#DCFCE7; border-top: 6px solid #DC2626;">
+        <div class="card-header">
+          <span class="room-name">beSwift</span>
+          <span class="badge" style="background:#16A34A">FREE</span>
+        </div>
+        <div class="detail">Free for the rest of the day</div>
+        
+      </div>
+  </div>
+</body>
+</html>
