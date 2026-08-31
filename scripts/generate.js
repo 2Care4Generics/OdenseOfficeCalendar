@@ -674,6 +674,18 @@ function startOfWeekMon(dp) {
   const diff = (wd === 0) ? 6 : wd - 1; // days since Monday
   return shiftDate(dp, -diff);
 }
+function isoWeekNumber(dp) {
+  // Standard ISO 8601 rule: week 1 is the week containing the year's first
+  // Thursday; weeks start Monday. Using the Thursday of the target week
+  // correctly handles weeks that span a year boundary.
+  const target = new Date(Date.UTC(dp.y, dp.m - 1, dp.d));
+  const dayNum = (target.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  target.setUTCDate(target.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstThursdayDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstThursdayDayNum + 3);
+  return 1 + Math.round((target - firstThursday) / (7 * 86400000));
+}
 function dateWithinFetchedRange(dp) {
   const t = Date.UTC(dp.y, dp.m - 1, dp.d);
   return t >= Date.UTC(minDate.y, minDate.m - 1, minDate.d) && t <= Date.UTC(maxDate.y, maxDate.m - 1, maxDate.d);
@@ -1090,9 +1102,10 @@ function render() {
     renderTimeGrid(days);
     const weekEnd = days[6];
     const sameMonth = weekStart.m === weekEnd.m;
-    document.getElementById('dateLabel').textContent = sameMonth
+    const rangeLabel = sameMonth
       ? weekStart.d + '\\u2013' + weekEnd.d + ' ' + monthName(weekEnd.y, weekEnd.m, weekEnd.d) + ' ' + weekEnd.y
       : weekStart.d + ' ' + monthName(weekStart.y, weekStart.m, weekStart.d, 'short') + ' \\u2013 ' + weekEnd.d + ' ' + monthName(weekEnd.y, weekEnd.m, weekEnd.d, 'short') + ' ' + weekEnd.y;
+    document.getElementById('dateLabel').textContent = 'Week ' + isoWeekNumber(weekStart) + ' \\u00b7 ' + rangeLabel;
   } else if (viewMode === 'month') {
     renderMonthGrid(viewDate);
     document.getElementById('dateLabel').textContent = monthName(viewDate.y, viewDate.m, viewDate.d) + ' ' + viewDate.y;
@@ -1165,9 +1178,13 @@ ROOMS.forEach(room => {
 // The countdown is anchored to GENERATED_AT (embedded at build time), not
 // to when this particular page load happened — so a manual browser
 // refresh, or the auto-refresh itself, doesn't reset the clock back to
-// a full 5:00. It always reflects time remaining in the real cycle.
-const AUTO_REFRESH_MINUTES = 5;
-const RETRY_SECONDS_WHEN_OVERDUE = 30; // polling interval if the Action is running late
+// a full cycle. It always reflects time remaining in the real cycle.
+//
+// This matches the external cron-job.org schedule (every 1 minute) that
+// triggers the Action via workflow_dispatch, not GitHub's own built-in
+// schedule trigger.
+const AUTO_REFRESH_MINUTES = 1;
+const RETRY_SECONDS_WHEN_OVERDUE = 15; // polling interval if the Action is running late
 const generatedAtMs = new Date(GENERATED_AT).getTime();
 
 function computeSecondsUntilRefresh() {
