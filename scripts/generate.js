@@ -701,14 +701,58 @@ function escapeHtml(str) {
 }
 
 // ---------- state ----------
+//
+// View state (mode, date, room filters) is persisted in sessionStorage so
+// that the auto-refresh reload (and manual browser refreshes) only update
+// the underlying data, not what the person was looking at. sessionStorage
+// is scoped to this one browser tab and clears when the tab is closed, so
+// a genuinely new visit still gets the intended "Week view, today" default.
+const STORAGE_KEY = 'roomCalendarViewState';
+
+function loadSavedState() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch (e) {
+    return null; // storage unavailable (e.g. private browsing) — fall back to defaults
+  }
+}
+function saveState() {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
+      viewMode,
+      viewDate,
+      visibleRooms: [...visibleRooms],
+    }));
+  } catch (e) {
+    // storage unavailable — nothing to do, state just won't persist across reloads
+  }
+}
 
 const nowParts = getLocalDateParts(new Date(), TIMEZONE);
-let viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
-let viewMode = 'week'; // 'day' | 'week' | 'month'
-let visibleRooms = new Set(ROOMS.map(r => r.name));
+const savedState = loadSavedState();
 
-const minDate = shiftDate(viewDate, -RANGE_DAYS_BEFORE);
-const maxDate = shiftDate(viewDate, RANGE_DAYS_AFTER);
+const validModes = ['day', 'week', 'month'];
+const validRoomNames = new Set(ROOMS.map(r => r.name));
+
+let viewMode = (savedState && validModes.includes(savedState.viewMode))
+  ? savedState.viewMode
+  : 'week'; // first-ever load in this tab defaults to Week view
+
+let viewDate = (savedState && savedState.viewDate && Number.isInteger(savedState.viewDate.y)
+    && Number.isInteger(savedState.viewDate.m) && Number.isInteger(savedState.viewDate.d))
+  ? savedState.viewDate
+  : { y: nowParts.y, m: nowParts.m, d: nowParts.d };
+
+let visibleRooms = (savedState && Array.isArray(savedState.visibleRooms) && savedState.visibleRooms.some(n => validRoomNames.has(n)))
+  ? new Set(savedState.visibleRooms.filter(n => validRoomNames.has(n)))
+  : new Set(ROOMS.map(r => r.name));
+
+const minDate = shiftDate({ y: nowParts.y, m: nowParts.m, d: nowParts.d }, -RANGE_DAYS_BEFORE);
+const maxDate = shiftDate({ y: nowParts.y, m: nowParts.m, d: nowParts.d }, RANGE_DAYS_AFTER);
 
 // ---------- event lookup ----------
 
@@ -1125,6 +1169,8 @@ function render() {
   document.querySelectorAll('.view-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === viewMode);
   });
+
+  saveState();
 }
 
 // ---------- wire up controls ----------
