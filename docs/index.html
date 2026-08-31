@@ -1,52 +1,371 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta http-equiv="refresh" content="60">
-  <title>Room Status</title>
-  <style>
-    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#F9FAFB; margin:0; padding:24px; }
-    h1 { font-size: 20px; color:#111827; margin-bottom: 4px; }
-    .timestamp { color:#6B7280; font-size: 13px; margin-bottom: 24px; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; max-width: 900px; }
-    .card { border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-    .room-name { font-size: 18px; font-weight:600; color:#111827; }
-    .badge { color:white; font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; letter-spacing:0.5px; }
-    .detail { font-size: 14px; color:#374151; margin-bottom: 8px; }
-    .upcoming { margin:0; padding-left:18px; font-size:12px; color:#6B7280; }
-    .upcoming li { margin-bottom:2px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room Calendar</title>
+<style>
+  :root {
+    --grid-line: #e1dfdd;
+    --text-primary: #201f1e;
+    --text-secondary: #605e5c;
+    --header-bg: #faf9f8;
+    --accent: #2564cf;
+    --now-line: #d13438;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", -apple-system, Roboto, Arial, sans-serif;
+    background: #ffffff;
+    color: var(--text-primary);
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--grid-line);
+    flex-wrap: wrap;
+  }
+  .nav-btn {
+    border: 1px solid var(--grid-line);
+    background: #fff;
+    border-radius: 4px;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+  .nav-btn:hover { background: var(--header-bg); }
+  .nav-btn:disabled { opacity: 0.35; cursor: default; }
+  .today-btn {
+    border: 1px solid var(--grid-line);
+    background: #fff;
+    border-radius: 4px;
+    padding: 0 14px;
+    height: 32px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--text-primary);
+  }
+  .today-btn:hover { background: var(--header-bg); }
+  .date-label {
+    font-size: 17px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .updated {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .calendar-wrap { overflow-x: auto; }
+  .calendar {
+    display: grid;
+    grid-template-columns: 56px repeat(3, minmax(160px, 1fr));
+    min-width: 640px;
+  }
+  .room-header {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 3;
+    border-bottom: 2px solid var(--grid-line);
+    padding: 10px 8px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .room-header .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .gutter-header { border-bottom: 2px solid var(--grid-line); }
+  .gutter { position: relative; border-right: 1px solid var(--grid-line); }
+  .gutter .hour-label {
+    position: absolute;
+    right: 8px;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .room-col {
+    position: relative;
+    border-right: 1px solid var(--grid-line);
+  }
+  .room-col:last-child { border-right: none; }
+  .hour-line {
+    position: absolute;
+    left: 0; right: 0;
+    border-top: 1px solid var(--grid-line);
+  }
+  .now-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 0;
+    border-top: 2px solid var(--now-line);
+    z-index: 2;
+  }
+  .now-dot {
+    position: absolute;
+    left: -4px; top: -4px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--now-line);
+  }
+  .event-block {
+    position: absolute;
+    left: 3px; right: 3px;
+    border-radius: 5px;
+    border-left: 3px solid;
+    padding: 3px 6px;
+    font-size: 12px;
+    line-height: 1.3;
+    overflow: hidden;
+    color: #201f1e;
+  }
+  .event-title { font-weight: 600; }
+  .event-time { color: var(--text-secondary); font-size: 11px; }
+  .empty-state {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .error-note {
+    padding: 8px;
+    font-size: 11px;
+    color: var(--now-line);
+    text-align: center;
+  }
+</style>
 </head>
 <body>
-  <h1>Meeting Room Status</h1>
-  <div class="timestamp">Updated 31/08/2026 10:40 (Europe/Copenhagen) · page checks for a refresh every 60s</div>
-  <div class="grid">
-    
-      <div class="card" style="background:#FEE2E2; border-top: 6px solid #4F46E5;">
-        <div class="card-header">
-          <span class="room-name">beC</span>
-          <span class="badge" style="background:#DC2626">BUSY</span>
-        </div>
-        <div class="detail">Inspektionssvar - de sidste detaljer ☺️ — until 11:00</div>
-        <ul class="upcoming"><li>10:00–11:00 Inspektionssvar - de sidste detaljer ☺️</li><li>11:15–11:45 Møde</li><li>12:30–12:55 LMH</li><li>13:00–14:00 Artwork - QA DEV</li></ul>
-      </div>
-      <div class="card" style="background:#FEE2E2; border-top: 6px solid #059669;">
-        <div class="card-header">
-          <span class="room-name">beJava</span>
-          <span class="badge" style="background:#DC2626">BUSY</span>
-        </div>
-        <div class="detail">Jan Jørgensen Estimater KA — until 12:00</div>
-        <ul class="upcoming"><li>10:30–12:00 Jan Jørgensen Estimater KA</li><li>12:30–15:00 Lene Elmer Hemmingsen Lene 2c4</li></ul>
-      </div>
-      <div class="card" style="background:#FEE2E2; border-top: 6px solid #DC2626;">
-        <div class="card-header">
-          <span class="room-name">beSwift</span>
-          <span class="badge" style="background:#DC2626">BUSY</span>
-        </div>
-        <div class="detail">Development (BD &amp; Prod. Dev.\,) Team Meeting — until 12:00</div>
-        <ul class="upcoming"><li>10:00–12:00 Development (BD &amp; Prod. Dev.\,) Team Meeting</li><li>13:00–14:30 MPDManager</li></ul>
-      </div>
-  </div>
+
+<div class="topbar">
+  <button class="nav-btn" id="prevBtn" aria-label="Previous day">&#8249;</button>
+  <button class="nav-btn" id="nextBtn" aria-label="Next day">&#8250;</button>
+  <button class="today-btn" id="todayBtn">Today</button>
+  <span class="date-label" id="dateLabel"></span>
+  <span class="updated" id="updatedLabel"></span>
+</div>
+
+<div class="calendar-wrap">
+  <div class="calendar" id="calendar"></div>
+</div>
+
+<script>
+const TIMEZONE = "Europe/Copenhagen";
+const GENERATED_AT = "2026-08-31T08:53:18.454Z";
+const ROOMS = [{"name":"beC","color":"#5B5FC7","events":[{"start":"2026-09-01T09:00:00.000Z","end":"2026-09-01T09:45:00.000Z","summary":"TJO:JDC"},{"start":"2026-09-01T12:00:00.000Z","end":"2026-09-01T12:45:00.000Z","summary":"ARI:JDC 1:1 (status and focus areas)"},{"start":"2026-09-07T11:00:00.000Z","end":"2026-09-07T11:30:00.000Z","summary":"1:1 APN-JDC"},{"start":"2026-08-28T06:30:00.000Z","end":"2026-08-28T07:00:00.000Z","summary":"RA LCM: ugen der gik / ugen der kommer 🙂"},{"start":"2026-09-04T06:30:00.000Z","end":"2026-09-04T07:00:00.000Z","summary":"RA LCM: ugen der gik / ugen der kommer 🙂"},{"start":"2026-09-11T06:30:00.000Z","end":"2026-09-11T07:00:00.000Z","summary":"RA LCM: ugen der gik / ugen der kommer 🙂"},{"start":"2026-09-07T09:00:00.000Z","end":"2026-09-07T09:45:00.000Z","summary":"CLP:JDC 1:1"},{"start":"2026-08-31T11:00:00.000Z","end":"2026-08-31T12:00:00.000Z","summary":"Artwork - QA DEV"},{"start":"2026-09-07T10:30:00.000Z","end":"2026-09-07T11:00:00.000Z","summary":"TK - Client service"},{"start":"2026-09-03T09:00:00.000Z","end":"2026-09-03T09:50:00.000Z","summary":"Sparring på guidelines"},{"start":"2026-09-07T07:00:00.000Z","end":"2026-09-07T08:00:00.000Z","summary":"Batavia follow-up"},{"start":"2026-08-28T07:30:00.000Z","end":"2026-08-28T08:00:00.000Z","summary":"SHA2C4"},{"start":"2026-08-28T08:00:00.000Z","end":"2026-08-28T09:00:00.000Z","summary":"Mads 2care4"},{"start":"2026-08-28T09:00:00.000Z","end":"2026-08-28T09:30:00.000Z","summary":"THT"},{"start":"2026-08-28T10:30:00.000Z","end":"2026-08-28T11:00:00.000Z","summary":"2c4 IVI"},{"start":"2026-08-28T11:30:00.000Z","end":"2026-08-28T12:00:00.000Z","summary":"Marie status"},{"start":"2026-08-31T06:30:00.000Z","end":"2026-08-31T07:00:00.000Z","summary":"Lene 2c4"},{"start":"2026-08-31T07:00:00.000Z","end":"2026-08-31T08:00:00.000Z","summary":"2c4 MNN"},{"start":"2026-08-31T08:00:00.000Z","end":"2026-08-31T09:00:00.000Z","summary":"Inspektionssvar - de sidste detaljer ☺️"},{"start":"2026-08-31T09:15:00.000Z","end":"2026-08-31T09:45:00.000Z","summary":"Møde"},{"start":"2026-08-31T10:30:00.000Z","end":"2026-08-31T10:55:00.000Z","summary":"LMH"},{"start":"2026-08-31T12:00:00.000Z","end":"2026-08-31T13:00:00.000Z","summary":"2c4 IVI"},{"start":"2026-08-31T13:00:00.000Z","end":"2026-08-31T13:30:00.000Z","summary":"Signe follow up"},{"start":"2026-09-01T07:30:00.000Z","end":"2026-09-01T08:30:00.000Z","summary":"Room"},{"start":"2026-09-01T08:30:00.000Z","end":"2026-09-01T09:15:00.000Z","summary":"TJO:JDC"},{"start":"2026-09-01T10:30:00.000Z","end":"2026-09-01T10:55:00.000Z","summary":"Project Mgt course"},{"start":"2026-09-01T13:30:00.000Z","end":"2026-09-01T14:00:00.000Z","summary":"Aleksander / Kevin - 1st day wrap-up"},{"start":"2026-09-02T06:30:00.000Z","end":"2026-09-02T07:00:00.000Z","summary":"Lene 2c4"},{"start":"2026-09-02T07:00:00.000Z","end":"2026-09-02T09:00:00.000Z","summary":"PSUR træning"},{"start":"2026-09-02T09:00:00.000Z","end":"2026-09-02T10:00:00.000Z","summary":"Lene 2c4"},{"start":"2026-09-02T12:30:00.000Z","end":"2026-09-02T13:30:00.000Z","summary":"Lene 2c4"},{"start":"2026-09-03T07:00:00.000Z","end":"2026-09-03T08:00:00.000Z","summary":"Besøg af Line"},{"start":"2026-09-03T09:00:00.000Z","end":"2026-09-03T09:30:00.000Z","summary":"Lene 2c4"},{"start":"2026-09-03T11:00:00.000Z","end":"2026-09-03T11:50:00.000Z","summary":"Sparring på guidelines"},{"start":"2026-09-03T12:00:00.000Z","end":"2026-09-03T13:00:00.000Z","summary":"1:1 Tine/Marianne"},{"start":"2026-09-04T08:00:00.000Z","end":"2026-09-04T09:00:00.000Z","summary":"Mock-ups status"},{"start":"2026-09-07T12:00:00.000Z","end":"2026-09-07T13:00:00.000Z","summary":"Artwork - QA DEV"},{"start":"2026-09-08T11:15:00.000Z","end":"2026-09-08T12:15:00.000Z","summary":"Pensionstjek"}],"error":null},{"name":"beJava","color":"#0F8B62","events":[{"start":"2026-09-08T08:00:00.000Z","end":"2026-09-08T09:00:00.000Z","summary":"Dorte Luplau Jensen DJE (2care4)"},{"start":"2026-08-28T06:30:00.000Z","end":"2026-08-28T07:00:00.000Z","summary":"Mads Harder Thingholm Mads 2care4"},{"start":"2026-08-28T07:00:00.000Z","end":"2026-08-28T08:00:00.000Z","summary":"Toke Jónsson TPP template"},{"start":"2026-08-31T06:30:00.000Z","end":"2026-08-31T07:00:00.000Z","summary":"Inge Villsen ivi 2c4"},{"start":"2026-08-31T07:00:00.000Z","end":"2026-08-31T08:00:00.000Z","summary":"Jonathan D. Castile MNN:JDC sparring"},{"start":"2026-08-31T08:30:00.000Z","end":"2026-08-31T10:00:00.000Z","summary":"Jan Jørgensen Estimater KA"},{"start":"2026-08-31T10:30:00.000Z","end":"2026-08-31T13:00:00.000Z","summary":"Lene Elmer Hemmingsen Lene 2c4"},{"start":"2026-09-01T05:00:00.000Z","end":"2026-09-01T08:30:00.000Z","summary":"Henrik Stær Grove Lokaler til Marko - Netværk"},{"start":"2026-09-01T10:30:00.000Z","end":"2026-09-01T12:00:00.000Z","summary":"Henrik Stær Grove HK og Apps"},{"start":"2026-09-01T12:00:00.000Z","end":"2026-09-01T12:30:00.000Z","summary":"Lene Elmer Hemmingsen Lene 2c4"},{"start":"2026-09-02T11:00:00.000Z","end":"2026-09-02T12:30:00.000Z","summary":"Tine Plovgaard TJO-CLP-TIP status"},{"start":"2026-09-03T07:00:00.000Z","end":"2026-09-03T08:00:00.000Z","summary":"Jan Jørgensen Marko"},{"start":"2026-09-03T11:30:00.000Z","end":"2026-09-03T12:30:00.000Z","summary":"Jette von Podewils Jette (2care4)"},{"start":"2026-09-07T11:00:00.000Z","end":"2026-09-07T12:00:00.000Z","summary":"Anne Pedersen Clobazam 10mg tablets - Product evaluation"},{"start":"2026-09-08T11:00:00.000Z","end":"2026-09-08T12:30:00.000Z","summary":"Jette von Podewils Jette (2care4)"},{"start":"2026-09-10T09:00:00.000Z","end":"2026-09-10T10:00:00.000Z","summary":"Jette von Podewils Pharmacovigilance 2care4 Generics - status meeting"},{"start":"2026-09-11T08:00:00.000Z","end":"2026-09-11T10:00:00.000Z","summary":"Tine Søndergaard Jensen GFL/TIJ 1:1"}],"error":null},{"name":"beSwift","color":"#B0280A","events":[{"start":"2026-09-07T08:00:00.000Z","end":"2026-09-07T10:00:00.000Z","summary":"Development (BD & Prod. Dev.\\,) Team Meeting"},{"start":"2026-09-08T10:30:00.000Z","end":"2026-09-08T11:30:00.000Z","summary":"Batavia TC "},{"start":"2026-08-28T06:30:00.000Z","end":"2026-08-28T10:00:00.000Z","summary":"2c4 IVI"},{"start":"2026-08-31T07:30:00.000Z","end":"2026-08-31T08:00:00.000Z","summary":"Møde"},{"start":"2026-08-31T08:00:00.000Z","end":"2026-08-31T10:00:00.000Z","summary":"Development (BD & Prod. Dev.\\,) Team Meeting"},{"start":"2026-08-31T11:00:00.000Z","end":"2026-08-31T12:30:00.000Z","summary":"MPDManager"},{"start":"2026-09-01T05:00:00.000Z","end":"2026-09-01T08:30:00.000Z","summary":"Lokaler til Marko - Netværk"},{"start":"2026-09-01T10:30:00.000Z","end":"2026-09-01T12:00:00.000Z","summary":"Færdiggørelse af launch træningsplan"},{"start":"2026-09-02T07:00:00.000Z","end":"2026-09-02T09:00:00.000Z","summary":"LMH"},{"start":"2026-09-03T07:00:00.000Z","end":"2026-09-03T11:00:00.000Z","summary":"BD & DEV Team Hygge"},{"start":"2026-09-03T11:30:00.000Z","end":"2026-09-03T12:30:00.000Z","summary":"BI reports / ERP & Market Module "},{"start":"2026-09-04T12:30:00.000Z","end":"2026-09-04T13:30:00.000Z","summary":"Kick-off 2. halvår - "},{"start":"2026-09-07T08:00:00.000Z","end":"2026-09-07T10:00:00.000Z","summary":"QTPP workshop part 2"},{"start":"2026-09-09T07:00:00.000Z","end":"2026-09-09T09:00:00.000Z","summary":"LMH"},{"start":"2026-09-10T09:00:00.000Z","end":"2026-09-10T10:00:00.000Z","summary":"TJO-CLP-TIP status"},{"start":"2026-09-11T08:00:00.000Z","end":"2026-09-11T10:00:00.000Z","summary":"GFL/TIJ 1:1"}],"error":null}];
+const RANGE_DAYS_BEFORE = 3;
+const RANGE_DAYS_AFTER = 13;
+const ROW_HEIGHT = 48; // px per hour
+
+function formatInTZ(date, tz) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(date);
+  const p = {};
+  parts.forEach(x => { p[x.type] = x.value; });
+  return p;
+}
+function getLocalDateParts(date, tz) {
+  const p = formatInTZ(date, tz);
+  return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour, mi: +p.minute, s: +p.second };
+}
+function localWallTimeToUTC(y, m, d, h, mi, s, tz) {
+  const guess = new Date(Date.UTC(y, m - 1, d, h, mi, s));
+  const f = getLocalDateParts(guess, tz);
+  const guessAsIfUTC = Date.UTC(f.y, f.m - 1, f.d, f.h, f.mi, f.s);
+  const offset = guessAsIfUTC - guess.getTime();
+  return new Date(guess.getTime() - offset);
+}
+function weekdayName(y, m, d) {
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(y, m - 1, d)));
+}
+function monthName(y, m, d) {
+  return new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+const nowParts = getLocalDateParts(new Date(), TIMEZONE);
+let viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
+
+const minDate = shiftDate(viewDate, -RANGE_DAYS_BEFORE);
+const maxDate = shiftDate(viewDate, RANGE_DAYS_AFTER);
+
+function shiftDate(dp, delta) {
+  const t = new Date(Date.UTC(dp.y, dp.m - 1, dp.d + delta));
+  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+}
+function sameDate(a, b) { return a.y === b.y && a.m === b.m && a.d === b.d; }
+function dateWithinRange(dp) {
+  const t = Date.UTC(dp.y, dp.m - 1, dp.d);
+  return t >= Date.UTC(minDate.y, minDate.m - 1, minDate.d) && t <= Date.UTC(maxDate.y, maxDate.m - 1, maxDate.d);
+}
+
+function formatHourLabel(h) {
+  const period = h < 12 ? 'AM' : 'PM';
+  let hh = h % 12;
+  if (hh === 0) hh = 12;
+  return hh + ' ' + period;
+}
+
+function render() {
+  const dayStart = localWallTimeToUTC(viewDate.y, viewDate.m, viewDate.d, 0, 0, 0, TIMEZONE);
+  const dayEnd = localWallTimeToUTC(viewDate.y, viewDate.m, viewDate.d, 23, 59, 59, TIMEZONE);
+
+  // clip each room's events to this day, in local wall-clock hours
+  const perRoom = ROOMS.map(room => {
+    const clipped = [];
+    room.events.forEach(ev => {
+      const s = new Date(ev.start), e = new Date(ev.end);
+      if (s <= dayEnd && e >= dayStart) {
+        const clipStart = s < dayStart ? dayStart : s;
+        const clipEnd = e > dayEnd ? dayEnd : e;
+        const sp = getLocalDateParts(clipStart, TIMEZONE);
+        const ep = getLocalDateParts(clipEnd, TIMEZONE);
+        clipped.push({
+          summary: ev.summary,
+          startHour: sp.h + sp.mi / 60,
+          endHour: ep.h + ep.mi / 60 + (ep.h === 23 && ep.mi === 59 ? (60 - ep.s / 60) / 60 : 0),
+          startLabel: String(sp.h).padStart(2, '0') + ':' + String(sp.mi).padStart(2, '0'),
+          endLabel: String(ep.h).padStart(2, '0') + ':' + String(ep.mi).padStart(2, '0'),
+        });
+      }
+    });
+    return { room, events: clipped, error: room.error };
+  });
+
+  // dynamic hour range: default 7-19, expand to fit events
+  let minHour = 7, maxHour = 19;
+  perRoom.forEach(r => r.events.forEach(ev => {
+    minHour = Math.min(minHour, Math.floor(ev.startHour));
+    maxHour = Math.max(maxHour, Math.ceil(ev.endHour));
+  }));
+  minHour = Math.max(0, minHour);
+  maxHour = Math.min(24, maxHour);
+  const totalHours = maxHour - minHour;
+  const gridHeight = totalHours * ROW_HEIGHT;
+
+  const cal = document.getElementById('calendar');
+  cal.style.gridTemplateRows = '44px ' + gridHeight + 'px';
+  cal.innerHTML = '';
+
+  // top-left empty corner
+  const corner = document.createElement('div');
+  corner.className = 'gutter-header';
+  cal.appendChild(corner);
+
+  // room headers
+  perRoom.forEach(r => {
+    const h = document.createElement('div');
+    h.className = 'room-header';
+    h.innerHTML = '<span class="dot" style="background:' + r.room.color + '"></span>' + r.room.name;
+    cal.appendChild(h);
+  });
+
+  // gutter (hour labels)
+  const gutter = document.createElement('div');
+  gutter.className = 'gutter';
+  gutter.style.height = gridHeight + 'px';
+  for (let h = minHour; h <= maxHour; h++) {
+    const label = document.createElement('div');
+    label.className = 'hour-label';
+    label.style.top = ((h - minHour) * ROW_HEIGHT) + 'px';
+    label.textContent = formatHourLabel(h);
+    gutter.appendChild(label);
+  }
+  cal.appendChild(gutter);
+
+  const isToday = sameDate(viewDate, nowParts);
+
+  perRoom.forEach(r => {
+    const col = document.createElement('div');
+    col.className = 'room-col';
+    col.style.height = gridHeight + 'px';
+
+    if (r.error) {
+      const err = document.createElement('div');
+      err.className = 'error-note';
+      err.textContent = 'Could not load this calendar';
+      col.appendChild(err);
+    }
+
+    for (let h = minHour; h <= maxHour; h++) {
+      const line = document.createElement('div');
+      line.className = 'hour-line';
+      line.style.top = ((h - minHour) * ROW_HEIGHT) + 'px';
+      col.appendChild(line);
+    }
+
+    r.events.forEach(ev => {
+      const block = document.createElement('div');
+      block.className = 'event-block';
+      const top = (ev.startHour - minHour) * ROW_HEIGHT;
+      const height = Math.max(18, (ev.endHour - ev.startHour) * ROW_HEIGHT - 2);
+      block.style.top = top + 'px';
+      block.style.height = height + 'px';
+      block.style.background = r.room.color + '22';
+      block.style.borderLeftColor = r.room.color;
+      block.innerHTML = '<div class="event-title">' + escapeHtml(ev.summary) + '</div>' +
+        '<div class="event-time">' + ev.startLabel + '–' + ev.endLabel + '</div>';
+      col.appendChild(block);
+    });
+
+    if (isToday) {
+      const nowP = getLocalDateParts(new Date(), TIMEZONE);
+      const nowHour = nowP.h + nowP.mi / 60;
+      if (nowHour >= minHour && nowHour <= maxHour) {
+        const line = document.createElement('div');
+        line.className = 'now-line';
+        line.style.top = ((nowHour - minHour) * ROW_HEIGHT) + 'px';
+        const dot = document.createElement('div');
+        dot.className = 'now-dot';
+        line.appendChild(dot);
+        col.appendChild(line);
+      }
+    }
+
+    cal.appendChild(col);
+  });
+
+  document.getElementById('dateLabel').textContent =
+    weekdayName(viewDate.y, viewDate.m, viewDate.d) + ', ' + viewDate.d + ' ' + monthName(viewDate.y, viewDate.m, viewDate.d) + ' ' + viewDate.y;
+
+  const genParts = getLocalDateParts(new Date(GENERATED_AT), TIMEZONE);
+  document.getElementById('updatedLabel').textContent =
+    'Updated ' + String(genParts.h).padStart(2,'0') + ':' + String(genParts.mi).padStart(2,'0');
+
+  document.getElementById('prevBtn').disabled = !dateWithinRange(shiftDate(viewDate, -1));
+  document.getElementById('nextBtn').disabled = !dateWithinRange(shiftDate(viewDate, 1));
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+  const d = shiftDate(viewDate, -1);
+  if (dateWithinRange(d)) { viewDate = d; render(); }
+});
+document.getElementById('nextBtn').addEventListener('click', () => {
+  const d = shiftDate(viewDate, 1);
+  if (dateWithinRange(d)) { viewDate = d; render(); }
+});
+document.getElementById('todayBtn').addEventListener('click', () => {
+  viewDate = { y: nowParts.y, m: nowParts.m, d: nowParts.d };
+  render();
+});
+
+render();
+</script>
 </body>
 </html>
