@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: read # needed to check recent run history for the failure-alert step
 
 jobs:
   update:
@@ -34,3 +35,33 @@ jobs:
           git add docs/index.html
           git diff --quiet --cached || git commit -m "Update room dashboard"
           git push
+
+      # Only fires if one of the steps above failed. Doesn't alert on a single
+      # blip — only once this run makes THRESHOLD failures in a row, so a
+      # one-off hiccup (e.g. Outlook's feed timing out once) stays quiet.
+      - name: Alert Teams after repeated failures
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          THRESHOLD=3
+          CURRENT_RUN_ID="${{ github.run_id }}"
+
+          PREV_CONCLUSIONS=$(gh run list \
+            --workflow=update-dashboard.yml --branch=main --limit=10 \
+            --json databaseId,conclusion,status \
+            --jq "[.[] | select(.status == \"completed\" and .databaseId != $CURRENT_RUN_ID)] | .[0:$((THRESHOLD-1))] | map(.conclusion)")
+
+          COUNT=$(echo "$PREV_CONCLUSIONS" | jq 'length')
+          ALL_FAILED=$(echo "$PREV_CONCLUSIONS" | jq 'all(. == "failure")')
+
+          echo "Prior consecutive failures found: $COUNT/$((THRESHOLD-1)) (all failed: $ALL_FAILED)"
+
+          if [ "$COUNT" -eq "$((THRESHOLD-1))" ] && [ "$ALL_FAILED" = "true" ]; then
+            echo "Threshold reached ($THRESHOLD failures in a row) — sending Teams alert"
+            curl -sf -H "Content-Type: application/json" -d "{
+              \"text\": \"\u26a0\ufe0f **Room dashboard** has failed $THRESHOLD times in a row. Calendar data may be stale. [Check the workflow](https://github.com/${{ github.repository }}/actions/workflows/update-dashboard.yml)\"
+            }" "${{ secrets.TEAMS_WEBHOOK_URL }}"
+          else
+            echo "Not yet at the alert threshold — staying quiet"
+          fi
