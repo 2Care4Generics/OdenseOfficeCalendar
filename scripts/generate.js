@@ -18,9 +18,9 @@ const path = require('path');
 const TIMEZONE = 'Europe/Copenhagen'; // change if your office is elsewhere
 
 const ROOMS = [
-  { name: 'beC',      url: 'https://outlook.office365.com/owa/calendar/1c5af52f99f848fa89a70fe5a779d8bf@pentia.dk/435fe01696e14750934a0e8c132431c812962649515559264857/calendar.ics', color: '#5B5FC7' },
-  { name: 'beJava',   url: 'https://outlook.office365.com/owa/calendar/114040dfd4234b0396507d4204e608aa@pentia.dk/77c45a3e85a846fa99b9fbfd2697d04a10085636735793479152/calendar.ics', color: '#0F8B62' },
-  { name: 'beSwift',  url: 'https://outlook.office365.com/owa/calendar/bfd0e9abe15346fa8bef788a90fd084a@pentia.dk/001c669c0199496996f5da8cf22899dc17789031396291427944/calendar.ics', color: '#B0280A' },
+  { name: 'beC',      url: 'https://outlook.office365.com/owa/calendar/1c5af52f99f848fa89a70fe5a779d8bf@pentia.dk/435fe01696e14750934a0e8c132431c812962649515559264857/calendar.ics', color: '#5B5FC7', email: 'meeting_beC@pentia.dk' },
+  { name: 'beJava',   url: 'https://outlook.office365.com/owa/calendar/114040dfd4234b0396507d4204e608aa@pentia.dk/77c45a3e85a846fa99b9fbfd2697d04a10085636735793479152/calendar.ics', color: '#0F8B62', email: 'meeting_beJava@pentia.dk' },
+  { name: 'beSwift',  url: 'https://outlook.office365.com/owa/calendar/bfd0e9abe15346fa8bef788a90fd084a@pentia.dk/001c669c0199496996f5da8cf22899dc17789031396291427944/calendar.ics', color: '#B0280A', email: 'meeting_beSwift@pentia.dk' },
 ];
 
 const OUTPUT_FILE = path.join(__dirname, '..', 'docs', 'index.html');
@@ -594,6 +594,41 @@ function renderPage(roomsData, generatedAtISO) {
     margin-bottom: 4px;
   }
   .event-modal .modal-row .label { color: var(--text-secondary); }
+
+  /* ---- Book-slot modal ---- */
+  .book-modal-subject {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--grid-line);
+    border-radius: 5px;
+    padding: 7px 9px;
+    font-size: 13.5px;
+    font-family: inherit;
+    margin: 8px 0 14px;
+  }
+  .book-modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .book-modal-open-btn {
+    flex: 1;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 9px 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    display: block;
+  }
+  .book-modal-open-btn:hover { opacity: 0.92; }
+  .book-modal-note { font-size: 11.5px; color: var(--text-secondary); margin-top: 8px; }
+  .room-col.bookable { cursor: pointer; }
+  .room-col.bookable:hover { background: rgba(37, 100, 207, 0.05); }
 </style>
 </head>
 <body>
@@ -900,6 +935,116 @@ function closeEventDetail() {
   if (b) b.remove();
 }
 
+// ---------- book-slot modal ----------
+
+// Builds a real Outlook "compose new event" deep link with the room
+// pre-filled as an attendee. This is NOT a mailto: link — Exchange room
+// mailboxes only respond to genuine calendar invites, not plain emails.
+// The person still has to click Send in Outlook to actually complete the
+// booking; this just saves them building the invite from scratch.
+function buildOutlookComposeLink(room, startUTC, endUTC, subject) {
+  const params = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    startdt: startUTC.toISOString(),
+    enddt: endUTC.toISOString(),
+    subject: subject,
+    location: room.name,
+    to: room.email,
+  });
+  return 'https://outlook.office.com/calendar/deeplink/compose?' + params.toString();
+}
+
+function openBookSlotModal(room, dp, startHourFloat) {
+  closeEventDetail();
+  // Round to the nearest half hour, default a 1-hour duration
+  const roundedStart = Math.round(startHourFloat * 2) / 2;
+  const startH = Math.floor(roundedStart);
+  const startMi = (roundedStart % 1) * 60;
+  const endTotalMinutes = startH * 60 + startMi + 60;
+  const endH = Math.floor(endTotalMinutes / 60);
+  const endMi = endTotalMinutes % 60;
+
+  const startUTC = localWallTimeToUTC(dp.y, dp.m, dp.d, startH, startMi, 0, TIMEZONE);
+  const endUTC = localWallTimeToUTC(dp.y, dp.m, dp.d, endH % 24, endMi, 0, TIMEZONE);
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.id = 'eventModalBackdrop';
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeEventDetail();
+  });
+
+  const modal = document.createElement('div');
+  modal.className = 'event-modal';
+  modal.style.borderLeftColor = room.color;
+
+  const top = document.createElement('div');
+  top.className = 'modal-top';
+  const roomTag = document.createElement('span');
+  roomTag.className = 'room-tag';
+  roomTag.innerHTML = '<span class="dot" style="background:' + room.color + '"></span>' + escapeHtml(room.name);
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'modal-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.textContent = '\\u00d7';
+  closeBtn.addEventListener('click', closeEventDetail);
+  top.appendChild(roomTag);
+  top.appendChild(closeBtn);
+
+  const dateStr = weekdayName(dp.y, dp.m, dp.d) + ', ' + dp.d + ' ' + monthName(dp.y, dp.m, dp.d) + ' ' + dp.y;
+  const startLabel = String(startH).padStart(2, '0') + ':' + String(startMi).padStart(2, '0');
+  const endLabel = String(endH % 24).padStart(2, '0') + ':' + String(endMi).padStart(2, '0');
+
+  const title = document.createElement('div');
+  title.className = 'modal-title';
+  title.textContent = 'Book ' + room.name;
+
+  const dateRow = document.createElement('div');
+  dateRow.className = 'modal-row';
+  dateRow.innerHTML = '<span class="label">Date: </span>' + escapeHtml(dateStr);
+
+  const timeRow = document.createElement('div');
+  timeRow.className = 'modal-row';
+  timeRow.innerHTML = '<span class="label">Time: </span>' + startLabel + '\\u2013' + endLabel;
+
+  const subjectInput = document.createElement('input');
+  subjectInput.type = 'text';
+  subjectInput.className = 'book-modal-subject';
+  subjectInput.placeholder = 'Meeting title';
+  subjectInput.value = '';
+
+  const actions = document.createElement('div');
+  actions.className = 'book-modal-actions';
+  const openBtn = document.createElement('a');
+  openBtn.className = 'book-modal-open-btn';
+  openBtn.target = '_blank';
+  openBtn.rel = 'noopener';
+  openBtn.textContent = 'Open in Outlook';
+  function updateLink() {
+    const subject = subjectInput.value.trim() || (room.name + ' booking');
+    openBtn.href = buildOutlookComposeLink(room, startUTC, endUTC, subject);
+  }
+  subjectInput.addEventListener('input', updateLink);
+  updateLink();
+  actions.appendChild(openBtn);
+
+  const note = document.createElement('div');
+  note.className = 'book-modal-note';
+  note.textContent = 'Opens Outlook with this room already invited — click Send there to confirm the booking.';
+
+  modal.appendChild(top);
+  modal.appendChild(title);
+  modal.appendChild(dateRow);
+  modal.appendChild(timeRow);
+  modal.appendChild(subjectInput);
+  modal.appendChild(actions);
+  modal.appendChild(note);
+
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
+}
+
 // ---------- time-grid render (day & week share this) ----------
 
 function renderTimeGrid(days) {
@@ -1009,9 +1154,16 @@ function renderTimeGrid(days) {
 
     d.perRoom.forEach((r, i) => {
       const col = document.createElement('div');
-      col.className = 'room-col' + (isLastRoomOfDay(i) ? ' day-divider' : '');
+      col.className = 'room-col bookable' + (isLastRoomOfDay(i) ? ' day-divider' : '');
       col.style.gridColumn = String(startCol + i);
       col.style.height = gridHeight + 'px';
+      col.title = 'Click an empty slot to book ' + r.room.name;
+      col.addEventListener('click', (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
+        const clickedHour = minHour + (clickY / ROW_HEIGHT);
+        openBookSlotModal(r.room, d.dp, clickedHour);
+      });
 
       if (r.error) {
         const err = document.createElement('div');
@@ -1270,6 +1422,7 @@ async function main() {
     roomsData.push({
       name: room.name,
       color: room.color,
+      email: room.email,
       events: result.events,
       error: result.ok ? null : result.error,
     });
