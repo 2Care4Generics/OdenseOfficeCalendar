@@ -24,6 +24,8 @@ const ROOMS = [
 ];
 
 const OUTPUT_FILE = path.join(__dirname, '..', 'docs', 'index.html');
+const INSIGHTS_FILE = path.join(__dirname, '..', 'docs', 'insights.html');
+const STATS_FILE = path.join(__dirname, '..', 'data', 'stats-history.json');
 
 const DAYS_BEFORE = 35; // how many days back from today to fetch
 const DAYS_AFTER = 45;  // how many days forward from today to fetch
@@ -1408,6 +1410,240 @@ render();
 </html>`;
 }
 
+// ---------- Usage stats (persisted history) ----------
+//
+// Only ever records a day once it's fully finished (strictly before
+// "today"), and only if that date+room isn't already recorded. This makes
+// re-running the Action any number of times per day, or catching up after
+// downtime, safe by construction — nothing is ever double-counted, and
+// nothing already written is ever touched again.
+
+function computeDayRoomStats(events, dp) {
+  const dayStart = localWallTimeToUTC(dp.y, dp.m, dp.d, 0, 0, 0);
+  const dayEnd = localWallTimeToUTC(dp.y, dp.m, dp.d, 23, 59, 59);
+  let bookedMs = 0;
+  let meetingCount = 0;
+
+  events.forEach(ev => {
+    const s = new Date(ev.start), e = new Date(ev.end);
+    if (s <= dayEnd && e >= dayStart) {
+      const clipStart = s < dayStart ? dayStart : s;
+      const clipEnd = e > dayEnd ? dayEnd : e;
+      bookedMs += Math.max(0, clipEnd.getTime() - clipStart.getTime());
+      meetingCount += 1;
+    }
+  });
+
+  return { bookedHours: bookedMs / 3600000, meetingCount };
+}
+
+function loadStatsHistory() {
+  try {
+    const raw = fs.readFileSync(STATS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return []; // no file yet, or unreadable — start fresh
+  }
+}
+
+function updateStatsHistory(roomsData, now) {
+  const history = loadStatsHistory();
+  const existingKeys = new Set(history.map(r => r.date + '|' + r.room));
+
+  const nowParts = getLocalDateParts(now, TIMEZONE);
+
+  const added = [];
+
+  for (let offset = DAYS_BEFORE; offset >= 1; offset--) { // strictly before today only
+    const dp = (() => {
+      const t = new Date(Date.UTC(nowParts.y, nowParts.m - 1, nowParts.d - offset));
+      return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+    })();
+    const dateKey = dp.y + '-' + String(dp.m).padStart(2, '0') + '-' + String(dp.d).padStart(2, '0');
+
+    roomsData.forEach(room => {
+      const key = dateKey + '|' + room.name;
+      if (existingKeys.has(key)) return;
+      if (room.error) return; // don't record a zero/partial day if the fetch failed
+
+      const { bookedHours, meetingCount } = computeDayRoomStats(room.events, dp);
+      const entry = { date: dateKey, room: room.name, bookedHours: Math.round(bookedHours * 100) / 100, meetingCount };
+      history.push(entry);
+      added.push(entry);
+      existingKeys.add(key);
+    });
+  }
+
+  history.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.room.localeCompare(b.room)));
+
+  fs.mkdirSync(path.dirname(STATS_FILE), { recursive: true });
+  fs.writeFileSync(STATS_FILE, JSON.stringify(history), 'utf8');
+
+  if (added.length) {
+    console.log('Stats: backfilled', added.length, 'day/room entries');
+  }
+
+  return history;
+}
+
+// ---------- Insights page (private/unlinked — for IT use) ----------
+
+function isoWeekKey(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dp = { y, m, d };
+  const week = isoWeekNumber(dp);
+  // ISO week-year can differ from calendar year near Dec/Jan boundaries;
+  // approximate using the date's own year, fine for a week-label axis.
+  return y + '-W' + String(week).padStart(2, '0');
+}
+
+function isoWeekNumber(dp) {
+  const target = new Date(Date.UTC(dp.y, dp.m - 1, dp.d));
+  const dayNum = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstThursdayDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstThursdayDayNum + 3);
+  return 1 + Math.round((target - firstThursday) / (7 * 86400000));
+}
+
+function weekdayOfDateStr(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun..6=Sat
+}
+
+function renderInsightsPage(statsHistory, roomsMeta, generatedAtISO) {
+  const rooms = roomsMeta.map(r => ({ name: r.name, color: r.color }));
+  const roomColor = Object.fromEntries(rooms.map(r => [r.name, r.color]));
+
+  if (statsHistory.length === 0) {
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Room Insights</title></head>
+<body style="font-family:Segoe UI,Arial,sans-serif;padding:40px;color:#374151;">
+<h1>Room Usage Insights</h1>
+<p>No historical data yet — check back after the dashboard has been running for at least a day. History only starts accumulating from when this feature was deployed; it can't retroactively see bookings from before then.</p>
+</body></html>`;
+  }
+
+  // ---- Aggregate: totals per room ----
+  const totals = {};
+  rooms.forEach(r => { totals[r.name] = { hours: 0, meetings: 0 }; });
+  statsHistory.forEach(e => {
+    if (!totals[e.room]) totals[e.room] = { hours: 0, meetings: 0 };
+    totals[e.room].hours += e.bookedHours;
+    totals[e.room].meetings += e.meetingCount;
+  });
+
+  const dateRange = { min: statsHistory[0].date, max: statsHistory[statsHistory.length - 1].date };
+
+  // ---- Aggregate: weekday totals (combined across rooms) ----
+  const weekdayHours = [0, 0, 0, 0, 0, 0, 0]; // Sun..Sat
+  statsHistory.forEach(e => { weekdayHours[weekdayOfDateStr(e.date)] += e.bookedHours; });
+  const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // Reorder Mon-Sun for display
+  const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
+
+  // ---- Aggregate: last 12 ISO weeks per room ----
+  const weekTotals = {}; // weekKey -> { [room]: hours }
+  statsHistory.forEach(e => {
+    const wk = isoWeekKey(e.date);
+    if (!weekTotals[wk]) weekTotals[wk] = {};
+    weekTotals[wk][e.room] = (weekTotals[wk][e.room] || 0) + e.bookedHours;
+  });
+  const weekKeys = Object.keys(weekTotals).sort().slice(-12);
+
+  // ---- Render ----
+  const roomCards = rooms.map(r => {
+    const t = totals[r.name] || { hours: 0, meetings: 0 };
+    const avgLen = t.meetings > 0 ? (t.hours / t.meetings) : 0;
+    return `
+      <div class="stat-card" style="border-top-color:${r.color}">
+        <div class="stat-room">${escapeHtmlStatic(r.name)}</div>
+        <div class="stat-big">${t.hours.toFixed(0)}<span class="stat-unit">h</span></div>
+        <div class="stat-sub">${t.meetings} meetings \u00b7 avg ${avgLen.toFixed(1)}h</div>
+      </div>`;
+  }).join('');
+
+  const maxWeekVal = Math.max(1, ...weekKeys.map(wk => rooms.reduce((s, r) => s + (weekTotals[wk][r.name] || 0), 0)));
+  const weekBars = weekKeys.map(wk => {
+    const segments = rooms.map(r => {
+      const v = weekTotals[wk][r.name] || 0;
+      const pct = (v / maxWeekVal) * 100;
+      return `<div class="week-seg" style="height:${pct}%;background:${r.color}" title="${escapeHtmlStatic(r.name)}: ${v.toFixed(1)}h"></div>`;
+    }).join('');
+    const shortLabel = wk.split('-W')[1];
+    return `<div class="week-col"><div class="week-bar">${segments}</div><div class="week-label">W${shortLabel}</div></div>`;
+  }).join('');
+
+  const maxWeekdayVal = Math.max(1, ...weekdayHours);
+  const weekdayBars = weekdayOrder.map(i => {
+    const v = weekdayHours[i];
+    const pct = (v / maxWeekdayVal) * 100;
+    return `<div class="wd-col"><div class="wd-bar-track"><div class="wd-bar" style="height:${pct}%"></div></div><div class="wd-label">${WEEKDAY_LABELS[i]}</div></div>`;
+  }).join('');
+
+  const genParts = getLocalDateParts(new Date(generatedAtISO), TIMEZONE);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Room Insights (Admin)</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", -apple-system, Roboto, Arial, sans-serif; background: #F9FAFB; color: #201f1e; padding: 32px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #605e5c; font-size: 13px; margin-bottom: 28px; }
+  .badge { display: inline-block; background: #FEF3C7; color: #92400E; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; max-width: 760px; margin-bottom: 40px; }
+  .stat-card { background: #fff; border-radius: 10px; border-top: 5px solid; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .stat-room { font-size: 13px; font-weight: 700; color: #605e5c; margin-bottom: 6px; }
+  .stat-big { font-size: 30px; font-weight: 700; }
+  .stat-unit { font-size: 15px; font-weight: 600; color: #605e5c; margin-left: 2px; }
+  .stat-sub { font-size: 12px; color: #605e5c; margin-top: 4px; }
+  .panel { background: #fff; border-radius: 10px; padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); max-width: 900px; margin-bottom: 28px; }
+  .panel h2 { font-size: 15px; margin: 0 0 16px; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: #605e5c; margin-bottom: 14px; }
+  .legend span { display: inline-flex; align-items: center; margin-right: 14px; }
+  .legend .dot { width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+  .week-chart { display: flex; align-items: flex-end; gap: 6px; height: 160px; }
+  .week-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+  .week-bar { width: 100%; max-width: 28px; display: flex; flex-direction: column-reverse; height: 130px; border-radius: 3px 3px 0 0; overflow: hidden; }
+  .week-seg { width: 100%; }
+  .week-label { font-size: 10px; color: #605e5c; margin-top: 6px; }
+  .wd-chart { display: flex; align-items: flex-end; gap: 14px; height: 150px; }
+  .wd-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+  .wd-bar-track { width: 100%; max-width: 36px; height: 120px; display: flex; align-items: flex-end; }
+  .wd-bar { width: 100%; background: #2564cf; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .wd-label { font-size: 11px; color: #605e5c; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <h1>Room Usage Insights <span class="badge">Internal \u2014 not linked publicly</span></h1>
+  <div class="sub">Data from ${escapeHtmlStatic(dateRange.min)} to ${escapeHtmlStatic(dateRange.max)} \u00b7 generated ${String(genParts.h).padStart(2,'0')}:${String(genParts.mi).padStart(2,'0')}</div>
+
+  <div class="cards">${roomCards}</div>
+
+  <div class="panel">
+    <h2>Booked hours per week (last ${weekKeys.length} weeks)</h2>
+    <div class="legend">${rooms.map(r => `<span><span class="dot" style="background:${r.color}"></span>${escapeHtmlStatic(r.name)}</span>`).join('')}</div>
+    <div class="week-chart">${weekBars}</div>
+  </div>
+
+  <div class="panel">
+    <h2>Busiest day of the week (all rooms combined, all-time)</h2>
+    <div class="wd-chart">${weekdayBars}</div>
+  </div>
+</body>
+</html>`;
+}
+
+function escapeHtmlStatic(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 // ---------- Main ----------
 
 async function main() {
@@ -1428,10 +1664,16 @@ async function main() {
     });
   }
 
+  const statsHistory = updateStatsHistory(roomsData, now);
+
   const html = renderPage(roomsData, now.toISOString());
   fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
   fs.writeFileSync(OUTPUT_FILE, html, 'utf8');
   console.log('Wrote', OUTPUT_FILE);
+
+  const insightsHtml = renderInsightsPage(statsHistory, roomsData, now.toISOString());
+  fs.writeFileSync(INSIGHTS_FILE, insightsHtml, 'utf8');
+  console.log('Wrote', INSIGHTS_FILE);
 }
 
 main().catch(err => {
