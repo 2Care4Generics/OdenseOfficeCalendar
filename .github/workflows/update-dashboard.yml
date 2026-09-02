@@ -21,12 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # TEMPORARY — remove this step once the alert test is confirmed working.
-      - name: TEST — force a failure
-        run: |
-          echo "Deliberately failing to test the Teams alert."
-          exit 1
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
