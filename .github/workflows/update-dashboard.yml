@@ -65,9 +65,34 @@ jobs:
 
           if [ "$COUNT" -eq "$((THRESHOLD-1))" ] && [ "$ALL_FAILED" = "true" ]; then
             echo "Threshold reached ($THRESHOLD failures in a row) — sending Teams alert"
-            curl -sf -H "Content-Type: application/json" -d "{
-              \"text\": \"\u26a0\ufe0f **Room dashboard** has failed $THRESHOLD times in a row. Calendar data may be stale. [Check the workflow](https://github.com/${{ github.repository }}/actions/workflows/update-dashboard.yml)\"
-            }" "${{ secrets.TEAMS_WEBHOOK_URL }}"
+
+            # The Power Automate "Workflows" webhook (unlike the old classic
+            # Incoming Webhook connector) requires the full Adaptive Card
+            # envelope below, not a bare {"text": "..."} payload. Built via
+            # node -e (rather than a heredoc) so JSON.stringify guarantees
+            # valid escaping — no manual quoting pitfalls.
+            node -e "
+              const fs = require('fs');
+              const card = {
+                type: 'message',
+                attachments: [{
+                  contentType: 'application/vnd.microsoft.card.adaptive',
+                  content: {
+                    type: 'AdaptiveCard',
+                    '\$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
+                    version: '1.4',
+                    body: [
+                      { type: 'TextBlock', text: '\u26A0\uFE0F Room Dashboard update failed $THRESHOLD times in a row', weight: 'Bolder', size: 'Medium', wrap: true, color: 'Attention' },
+                      { type: 'TextBlock', text: 'Calendar data may be stale. Check the workflow run history for details.', wrap: true }
+                    ],
+                    actions: [{ type: 'Action.OpenUrl', title: 'View workflow', url: 'https://github.com/${{ github.repository }}/actions/workflows/update-dashboard.yml' }]
+                  }
+                }]
+              };
+              fs.writeFileSync('/tmp/teams_card.json', JSON.stringify(card));
+            "
+
+            curl -sf -H "Content-Type: application/json" -d @/tmp/teams_card.json "${{ secrets.TEAMS_WEBHOOK_URL }}"
           else
             echo "Not yet at the alert threshold — staying quiet"
           fi
